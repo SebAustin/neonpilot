@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neonpilot report: Apple M1 Max / smollm2-135m-instruct-q4_k_m</title>
+<style>
+:root {
+  --bg: #0b0d12; --fg: #e8e8ec; --accent: #4fd1c5; --accent2: #f6ad55;
+  --muted: #9aa0ab; --border: #242832; --surface: #161a22;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); margin: 0; padding: 2rem; line-height: 1.5;
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+h1, h2 { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
+th { background: var(--surface); }
+.bar-baseline { fill: var(--muted); }
+.bar-tuned { fill: var(--accent); }
+.chart-title { fill: var(--fg); font-size: 13px; }
+.bar-label { fill: var(--fg); font-size: 12px; }
+.caveat { color: var(--accent2); border-left: 3px solid var(--accent2); padding-left: 0.75rem; }
+section { margin-bottom: 2rem; }
+code { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>neonpilot report: Apple M1 Max / smollm2-135m-instruct-q4_k_m</h1>
+<p>Model file: <code>SmolLM2-135M-Instruct-Q4_K_M.gguf</code> | llama.cpp commit: <code>178a6c44937154dc4c4eff0d166f4a044c4fceba</code> | schema: <code>1.0.0</code></p>
+
+<section>
+<h2>Baseline vs. tuned</h2>
+<svg viewBox="0 0 440 96" role="img" aria-label="Generation throughput comparison chart"><text x="0" y="14" class="chart-title">Generation throughput</text><rect x="0" y="24" width="193.3" height="26" class="bar-baseline"></rect><text x="201.3" y="42" class="bar-label">Baseline: 40.00 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 60.00 t/s</text></svg>
+<svg viewBox="0 0 440 96" role="img" aria-label="Prefill throughput comparison chart"><text x="0" y="14" class="chart-title">Prefill throughput</text><rect x="0" y="24" width="161.1" height="26" class="bar-baseline"></rect><text x="169.1" y="42" class="bar-label">Baseline: 100.00 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 180.00 t/s</text></svg>
+<p>Generation speedup: +50.0% | Prefill speedup: +80.0%</p>
+</section>
+<section>
+<h2>Chip ISA features</h2>
+<table><thead><tr><th>Feature</th><th>Present</th></tr></thead><tbody><tr><td>neon</td><td>True</td></tr><tr><td>dotprod</td><td>True</td></tr><tr><td>i8mm</td><td>False</td></tr><tr><td>bf16</td><td>False</td></tr><tr><td>fp16</td><td>True</td></tr><tr><td>sme</td><td>False</td></tr><tr><td>sme2</td><td>False</td></tr><tr><td>sve</td><td>False</td></tr><tr><td>sve2</td><td>False</td></tr></tbody></table>
+</section>
+<section>
+<h2>llama.cpp fast-path activation</h2>
+<table><thead><tr><th>Feature</th><th>Kernel</th><th>Active</th><th>Why</th></tr></thead><tbody><tr><td>neon</td><td>NEON generic dot-product kernel (CPU_REPACK, no KleidiAI micro-kernel)</td><td>False</td><td>NEON present but superseded by a higher KleidiAI tier (dotprod/i8mm/sme2).</td></tr><tr><td>dotprod</td><td>KleidiAI DOTPROD q4/q8 GEMM</td><td>True</td><td>i8mm ABSENT -&gt; DOTPROD-tier KleidiAI kernels engaged; SME disabled; other quant types via CPU_REPACK q6_K_8x4.</td></tr><tr><td>i8mm</td><td>KleidiAI I8MM q4/q8 GEMM</td><td>False</td><td>i8mm ABSENT -&gt; falls back to a lower KleidiAI tier (dotprod) or CPU_REPACK.</td></tr><tr><td>sme</td><td>SME (non-SME2) kernel</td><td>False</td><td>SME absent -&gt; no SME-family kernels available on this chip.</td></tr><tr><td>sme2</td><td>SME2 kernel (M5)</td><td>False</td><td>SME2 absent -&gt; SME-tier KleidiAI kernels do not engage on this chip.</td></tr></tbody></table>
+</section>
+<section>
+<h2>Methodology</h2>
+<ul>
+<li>Repetitions per config: 2 (prompt_n=64, gen_n=32)</li>
+<li>Wall-clock budget: 180s; actual elapsed: 42.5s</li>
+</ul>
+</section>
+<section>
+<h2>All trials</h2>
+<table><thead><tr><th>Trial</th><th>Stage</th><th>Status</th><th>Threads</th><th>KV</th><th>FA</th><th>Gen t/s</th><th>Prefill t/s</th></tr></thead><tbody><tr><td>A1</td><td>A</td><td>ok</td><td>6</td><td>f16</td><td>auto</td><td>45.00</td><td>100.00</td></tr><tr><td>A2</td><td>A</td><td>pruned</td><td>8</td><td>f16</td><td>auto</td><td>-</td><td>-</td></tr><tr><td>confirm-baseline</td><td>confirm</td><td>ok</td><td>8</td><td>f16</td><td>auto</td><td>40.00</td><td>100.00</td></tr><tr><td>confirm-best</td><td>confirm</td><td>ok</td><td>10</td><td>q4_0</td><td>on</td><td>60.00</td><td>180.00</td></tr></tbody></table>
+</section>
+</body>
+</html>
