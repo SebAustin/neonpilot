@@ -326,3 +326,81 @@ def test_apply_no_args_and_no_latest_run_exits_nonzero(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     result = runner.invoke(app, ["apply"])
     assert result.exit_code != 0
+
+
+def test_apply_rejects_forged_chip_id_path_traversal(
+    tmp_path, sample_chip_report, sample_sweep_result
+):
+    """SECURITY.md F2: a forged chip_id (e.g. from a shared/tampered run directory) must not
+    let `apply` escape --presets-root; it should fail cleanly, not write outside the root."""
+    import dataclasses
+
+    forged_chip = dataclasses.replace(sample_chip_report, chip_id="../../etc")
+    run_dir = tmp_path / "a-run"
+    run_dir.mkdir()
+    artifacts.dump(forged_chip, run_dir / "chip.json")
+    artifacts.dump(sample_sweep_result, run_dir / "result.json")
+    presets_root = tmp_path / "presets"
+    presets_root.mkdir()
+
+    result = runner.invoke(
+        app, ["apply", "--run-dir", str(run_dir), "--presets-root", str(presets_root)]
+    )
+
+    assert result.exit_code != 0
+    assert "refusing to save preset" in result.output.lower()
+    # nothing escaped the tmp_path sandbox
+    assert not (tmp_path.parent / "etc").exists()
+    assert list(presets_root.iterdir()) == []
+
+
+def test_apply_existing_preset_prints_server_flags_without_markup_injection(
+    tmp_path, sample_chip_report
+):
+    """SECURITY.md F5: `server_flags` is untrusted preset content -- Rich markup/hyperlink
+    syntax in it must be printed literally, never interpreted."""
+    from neonpilot.models import Preset
+
+    cfg = RuntimeConfig(
+        threads=10,
+        cache_type_k="q4_0",
+        cache_type_v="q4_0",
+        flash_attn="on",
+        batch=4096,
+        ubatch=2048,
+    )
+    injected = "[bold red]INJECTED[/bold red] [link=file:///etc/passwd]click me[/link]"
+    preset = Preset(
+        schema_version=SCHEMA_VERSION,
+        chip_id="apple-m1-max",
+        chip=sample_chip_report,
+        model_class="smollm2-135m-instruct-q4_k_m",
+        model_file="SmolLM2-135M-Instruct-Q4_K_M.gguf",
+        config=cfg,
+        llama_cpp_commit="178a6c44937154dc4c4eff0d166f4a044c4fceba",
+        generated_at="2026-07-20T00:00:00+00:00",
+        baseline_gen_ts=40.0,
+        baseline_prefill_ts=100.0,
+        tuned_gen_ts=60.0,
+        tuned_prefill_ts=180.0,
+        tuned_gen_stddev=1.0,
+        speedup_gen_pct=50.0,
+        speedup_prefill_pct=80.0,
+        server_flags=injected,
+        neonpilot_version="0.1.0",
+        os_version="test",
+        reps=3,
+        cooldown_s=0.0,
+    )
+    path = save_preset(preset, tmp_path)
+
+    result = runner.invoke(app, ["apply", str(path)])
+    # Rich may soft-wrap long lines at the captured terminal width; normalize before matching
+    # so the assertion isn't sensitive to exactly where a wrap lands.
+    flat_output = result.output.replace("\n", "")
+
+    assert result.exit_code == 0, result.output
+    # the raw markup tokens must survive verbatim in the rendered output (never stripped or
+    # interpreted as styling/hyperlink directives)
+    assert "[bold red]INJECTED[/bold red]" in flat_output
+    assert "[link=file:///etc/passwd]click me[/link]" in flat_output

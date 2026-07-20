@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
 
 from neonpilot.models import SCHEMA_VERSION, Preset, RuntimeConfig
-from neonpilot.preset.io import invocation, load, save
+from neonpilot.preset.io import UnsafePresetPathError, invocation, load, save
 from neonpilot.preset.schema import PresetValidationError
 
 
@@ -110,3 +111,59 @@ def test_invocation_shell_quotes_paths_with_spaces(sample_chip_report):
     preset = _make_preset(sample_chip_report, model_file="my model with spaces.gguf")
     line = invocation(preset)
     assert "'my model with spaces.gguf'" in line
+
+
+# --- SECURITY.md F2: path traversal via a forged chip_id/model_class ------------------------
+
+
+def test_save_rejects_traversal_via_forged_chip_id(tmp_path, sample_chip_report):
+    preset = _make_preset(sample_chip_report)
+    forged = dataclasses.replace(preset, chip_id="../../etc")
+    with pytest.raises(UnsafePresetPathError, match="chip_id"):
+        save(forged, tmp_path)
+    # nothing must have been written outside (or inside) the presets root
+    assert not (tmp_path.parent.parent / "etc").exists()
+
+
+def test_save_rejects_traversal_via_forged_model_class(tmp_path, sample_chip_report):
+    preset = _make_preset(sample_chip_report)
+    forged = dataclasses.replace(preset, model_class="../../escaped")
+    with pytest.raises(UnsafePresetPathError, match="model_class"):
+        save(forged, tmp_path)
+
+
+def test_save_rejects_bare_dot_dot_chip_id(tmp_path, sample_chip_report):
+    """A single ".." path *segment* needs no separator to traverse -- must be rejected even
+    though it passes a naive `[a-z0-9._-]+` character allow-list check."""
+    preset = _make_preset(sample_chip_report)
+    forged = dataclasses.replace(preset, chip_id="..")
+    with pytest.raises(UnsafePresetPathError):
+        save(forged, tmp_path)
+
+
+def test_save_rejects_chip_id_containing_slash(tmp_path, sample_chip_report):
+    preset = _make_preset(sample_chip_report)
+    forged = dataclasses.replace(preset, chip_id="apple-m1-max/../../etc")
+    with pytest.raises(UnsafePresetPathError):
+        save(forged, tmp_path)
+
+
+def test_save_accepts_normal_slugs_and_stays_under_root(tmp_path, sample_chip_report):
+    preset = _make_preset(sample_chip_report)
+    path = save(preset, tmp_path)
+    assert path.resolve().is_relative_to(tmp_path.resolve())
+
+
+def test_load_rejects_traversal_via_chip_id(tmp_path):
+    with pytest.raises(UnsafePresetPathError, match="chip_id"):
+        load("../../etc", "passwd", tmp_path)
+
+
+def test_load_rejects_traversal_via_model_class(tmp_path):
+    with pytest.raises(UnsafePresetPathError, match="model_class"):
+        load("apple-m1-max", "../../escaped", tmp_path)
+
+
+def test_load_rejects_empty_chip_id(tmp_path):
+    with pytest.raises(UnsafePresetPathError):
+        load("", "smollm2-135m-instruct-q4_k_m", tmp_path)

@@ -16,6 +16,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape as rich_escape
 
 from neonpilot import __version__, artifacts
 from neonpilot._llama_pin import LLAMA_CPP_COMMIT
@@ -29,6 +30,7 @@ from neonpilot.models import (
     SweepContext,
 )
 from neonpilot.preset import io as preset_io
+from neonpilot.preset.io import UnsafePresetPathError
 from neonpilot.preset.schema import PresetValidationError
 from neonpilot.preset.schema import validate as validate_preset
 from neonpilot.probe import probe_host
@@ -341,19 +343,33 @@ def apply(
             data = json.loads(preset_path.read_text(encoding="utf-8"))
             preset = validate_preset(data)
         except (json.JSONDecodeError, PresetValidationError) as exc:
-            error_console.print(f"[red]invalid preset: {exc}[/red]")
+            # exc may echo back attacker-controlled field values (SECURITY.md F5) -- escape
+            # before interpolating into a line that also carries our own intentional markup.
+            error_console.print(f"[red]invalid preset: {rich_escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
-        console.print(f"schema_version: {preset.schema_version} (OK)")
-        console.print(preset_io.invocation(preset))
-        console.print(f"server_flags: {preset.server_flags}")
+        _print_preset_summary(preset)
         return
 
     resolved_run_dir = _resolve_run_dir(run_dir or preset_path)
     preset = _build_preset_from_run(resolved_run_dir)
-    saved_path = preset_io.save(preset, presets_root)
+    try:
+        saved_path = preset_io.save(preset, presets_root)
+    except UnsafePresetPathError as exc:
+        error_console.print(f"[red]refusing to save preset: {rich_escape(str(exc))}[/red]")
+        raise typer.Exit(code=1) from exc
+    # `wrote {saved_path}` is safe: saved_path came from our own presets_root resolution, not
+    # directly from untrusted preset fields.
     console.print(f"wrote {saved_path}")
-    console.print(preset_io.invocation(preset))
-    console.print(f"server_flags: {preset.server_flags}")
+    _print_preset_summary(preset)
+
+
+def _print_preset_summary(preset: Preset) -> None:
+    """Print a preset's invocation + server_flags with markup disabled (SECURITY.md F5):
+    every value here (`preset.schema_version` only after an exact-match check aside) is
+    untrusted preset content and must never be interpreted as Rich markup/hyperlink syntax."""
+    console.print(f"schema_version: {preset.schema_version} (OK)", markup=False)
+    console.print(preset_io.invocation(preset), markup=False)
+    console.print(f"server_flags: {preset.server_flags}", markup=False)
 
 
 if __name__ == "__main__":
