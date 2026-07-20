@@ -138,6 +138,101 @@ def test_optimize_end_to_end_writes_artifacts(tmp_path, fake_llama_bin):
     assert result_data["model_class"] == "model"
 
 
+def test_optimize_warns_when_reps_below_recommended_minimum(tmp_path, fake_llama_bin):
+    """docs/dev/build-notes.md item 15: --reps below 3 is a documented risk factor for a
+    noise-dominated, implausible speedup number -- the CLI must say so up front."""
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"fake")
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(tmp_path / "runs"),
+            "--budget",
+            "180",
+            "--reps",
+            "1",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "below the recommended minimum" in result.output
+
+
+def test_optimize_does_not_warn_about_reps_when_at_recommended_minimum(tmp_path, fake_llama_bin):
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"fake")
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(tmp_path / "runs"),
+            "--budget",
+            "180",
+            "--reps",
+            "3",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "below the recommended minimum" not in result.output
+
+
+def test_optimize_warns_when_speedup_not_statistically_significant(tmp_path, fake_llama_bin):
+    """The fake llama-bench script returns the same t/s regardless of config, so baseline and
+    best are statistically tied -- the CLI must flag the speedup as unproven, not print a bare
+    (and here, 0%) percentage as if it were a confident result."""
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"fake")
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(tmp_path / "runs"),
+            "--budget",
+            "180",
+            "--reps",
+            "3",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "may not be statistically significant" in result.output
+
+
 def test_report_missing_run_dir_exits_nonzero(tmp_path):
     result = runner.invoke(app, ["report", "--run-dir", str(tmp_path / "nope")])
     assert result.exit_code != 0
