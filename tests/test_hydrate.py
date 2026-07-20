@@ -50,6 +50,112 @@ def test_from_dict_raises_on_non_dict_input():
         from_dict(ThermalSnapshot, "not a dict")
 
 
+def test_from_dict_rejects_string_in_int_field():
+    """SECURITY.md F1: a preset/artifact is untrusted input -- a string smuggled into a
+    declared `int` field (e.g. `threads`) must be rejected during hydration, not silently
+    accepted or coerced."""
+    from neonpilot.models import RuntimeConfig
+
+    data = {
+        "threads": "8; rm -rf /",
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "batch": 2048,
+        "ubatch": 512,
+    }
+    with pytest.raises(TypeError, match="expected int"):
+        from_dict(RuntimeConfig, data)
+
+
+def test_from_dict_rejects_bool_in_int_field():
+    """`bool` is a subclass of `int` in Python -- a naive `isinstance(value, int)` check would
+    silently accept `True`/`False` in an int field. Must be rejected explicitly."""
+    from neonpilot.models import RuntimeConfig
+
+    data = {
+        "threads": True,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "batch": 2048,
+        "ubatch": 512,
+    }
+    with pytest.raises(TypeError, match="expected int"):
+        from_dict(RuntimeConfig, data)
+
+
+def test_from_dict_rejects_int_in_str_field():
+    from neonpilot.models import RuntimeConfig
+
+    data = {
+        "threads": 8,
+        "cache_type_k": 16,
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "batch": 2048,
+        "ubatch": 512,
+    }
+    with pytest.raises(TypeError, match="expected str"):
+        from_dict(RuntimeConfig, data)
+
+
+def test_from_dict_rejects_string_in_float_field():
+    from neonpilot.models import BenchSample
+
+    data = {
+        "test_type": "tg",
+        "n_prompt": 0,
+        "n_gen": 32,
+        "avg_ts": "fast",
+        "stddev_ts": 1.0,
+        "samples_ts": [1.0],
+    }
+    with pytest.raises(TypeError, match="expected float"):
+        from_dict(BenchSample, data)
+
+
+def test_from_dict_accepts_int_for_float_field():
+    """A hand-authored preset writing `40` instead of `40.0` for a float field is common and
+    JSON-legal; widening int -> float is accepted (only the reverse direction is unsafe)."""
+    from neonpilot.models import BenchSample
+
+    data = {
+        "test_type": "tg",
+        "n_prompt": 0,
+        "n_gen": 32,
+        "avg_ts": 40,
+        "stddev_ts": 1,
+        "samples_ts": [40],
+    }
+    sample = from_dict(BenchSample, data)
+    assert sample.avg_ts == 40.0
+    assert isinstance(sample.avg_ts, float)
+
+
+def test_from_dict_rejects_non_bool_in_bool_field():
+    from neonpilot.models import ThermalSnapshot
+
+    data = {"source": "idle-skip", "cpu_temp_c": None, "throttled": "yes", "cooldown_s": 0.0}
+    with pytest.raises(TypeError, match="expected bool"):
+        from_dict(ThermalSnapshot, data)
+
+
+def test_from_dict_rejects_non_list_value_for_list_field():
+    from neonpilot.models import BenchSample
+
+    data = {
+        "test_type": "tg",
+        "n_prompt": 0,
+        "n_gen": 32,
+        "avg_ts": 1.0,
+        "stddev_ts": 1.0,
+        "samples_ts": "not-a-list",
+    }
+    with pytest.raises(TypeError, match="expected a list"):
+        from_dict(BenchSample, data)
+
+
 def test_from_dict_handles_optional_nested_dataclass_field():
     from neonpilot.models import RuntimeConfig, ThermalSnapshot, TrialResult
 
