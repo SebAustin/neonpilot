@@ -26,6 +26,15 @@ _BAR_HEIGHT = 26
 _BAR_GAP = 10
 _LABEL_OFFSET = 8
 
+
+def _esc(value: object) -> str:
+    """`html.escape(str(value))` for *every* interpolated value, numeric/bool included
+    (SECURITY.md F9). `_hydrate.py`'s strict scalar typing (F1) already guarantees these are
+    real `int`/`bool` by the time they reach this renderer, but escaping unconditionally is
+    cheap and removes any future dependence on that guarantee holding for HTML safety."""
+    return html.escape(str(value))
+
+
 _CSS = """
 :root {
   --bg: #0b0d12; --fg: #e8e8ec; --accent: #4fd1c5; --accent2: #f6ad55;
@@ -59,7 +68,7 @@ def _bar(y: int, value: float, max_value: float, css_class: str, label: str) -> 
         f'<rect x="0" y="{y}" width="{width:.1f}" height="{_BAR_HEIGHT}" '
         f'class="{css_class}"></rect>'
         f'<text x="{width + _LABEL_OFFSET:.1f}" y="{y + _BAR_HEIGHT - 8}" class="bar-label">'
-        f"{html.escape(label)}</text>"
+        f"{_esc(label)}</text>"
     )
 
 
@@ -78,19 +87,19 @@ def _comparison_chart(title: str, baseline_value: float, tuned_value: float, uni
     )
     return (
         f'<svg viewBox="0 0 {_CHART_WIDTH} {height}" role="img" '
-        f'aria-label="{html.escape(title)} comparison chart">'
-        f'<text x="0" y="14" class="chart-title">{html.escape(title)}</text>'
+        f'aria-label="{_esc(title)} comparison chart">'
+        f'<text x="0" y="14" class="chart-title">{_esc(title)}</text>'
         f"{baseline_bar}{tuned_bar}</svg>"
     )
 
 
 def _trial_row(trial: TrialResult) -> str:
-    gen = f"{trial.generation.avg_ts:.2f}" if trial.generation else "-"
-    prefill = f"{trial.prefill.avg_ts:.2f}" if trial.prefill else "-"
+    gen = _esc(f"{trial.generation.avg_ts:.2f}") if trial.generation else "-"
+    prefill = _esc(f"{trial.prefill.avg_ts:.2f}") if trial.prefill else "-"
     return (
-        f"<tr><td>{html.escape(trial.trial_id)}</td><td>{html.escape(trial.stage)}</td>"
-        f"<td>{html.escape(trial.status)}</td><td>{trial.config.threads}</td>"
-        f"<td>{html.escape(trial.config.cache_type_k)}</td><td>{html.escape(trial.config.flash_attn)}</td>"
+        f"<tr><td>{_esc(trial.trial_id)}</td><td>{_esc(trial.stage)}</td>"
+        f"<td>{_esc(trial.status)}</td><td>{_esc(trial.config.threads)}</td>"
+        f"<td>{_esc(trial.config.cache_type_k)}</td><td>{_esc(trial.config.flash_attn)}</td>"
         f"<td>{gen}</td><td>{prefill}</td></tr>"
     )
 
@@ -98,8 +107,8 @@ def _trial_row(trial: TrialResult) -> str:
 def _caveat_html(result: SweepResult) -> str:
     parts = []
     if result.budget_truncated:
-        dropped = ", ".join(result.dropped_stages)
-        text = f"Budget truncated -- dropped: {html.escape(dropped)}."
+        dropped = ", ".join(_esc(stage) for stage in result.dropped_stages)
+        text = f"Budget truncated -- dropped: {dropped}."
         if "confirm" in result.dropped_stages:
             text += (
                 " Confirm pass skipped: the speedup figures below use sweep-phase samples, "
@@ -107,7 +116,7 @@ def _caveat_html(result: SweepResult) -> str:
             )
         parts.append(f'<p class="caveat">{text}</p>')
     if not dominates(result.best, result.baseline):
-        parts.append(f'<p class="caveat">{html.escape(_LOW_CONFIDENCE_NOTE)}</p>')
+        parts.append(f'<p class="caveat">{_esc(_LOW_CONFIDENCE_NOTE)}</p>')
     return "".join(parts)
 
 
@@ -119,12 +128,12 @@ def render_html(result: SweepResult, chip: ChipReport) -> str:
     tuned_prefill = result.best.prefill.avg_ts if result.best.prefill else 0.0
 
     isa_rows = "".join(
-        f"<tr><td>{html.escape(feature)}</td><td>{present}</td></tr>"
+        f"<tr><td>{_esc(feature)}</td><td>{_esc(present)}</td></tr>"
         for feature, present in chip.isa.items()
     )
     fastpath_rows = "".join(
-        f"<tr><td>{html.escape(note.feature)}</td><td>{html.escape(note.kernel)}</td>"
-        f"<td>{note.active}</td><td>{html.escape(note.why)}</td></tr>"
+        f"<tr><td>{_esc(note.feature)}</td><td>{_esc(note.kernel)}</td>"
+        f"<td>{_esc(note.active)}</td><td>{_esc(note.why)}</td></tr>"
         for note in chip.fast_paths
     )
     trial_rows = "".join(_trial_row(trial) for trial in result.trials)
@@ -134,21 +143,21 @@ def render_html(result: SweepResult, chip: ChipReport) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>neonpilot report: {html.escape(chip.chip_name)} / {html.escape(result.model_class)}</title>
+<title>neonpilot report: {_esc(chip.chip_name)} / {_esc(result.model_class)}</title>
 <style>{_CSS}</style>
 </head>
 <body>
-<h1>neonpilot report: {html.escape(chip.chip_name)} / {html.escape(result.model_class)}</h1>
-<p>Model file: <code>{html.escape(result.model_file)}</code> | llama.cpp commit: \
-<code>{html.escape(result.llama_cpp_commit)}</code> | schema: \
-<code>{html.escape(result.schema_version)}</code></p>
+<h1>neonpilot report: {_esc(chip.chip_name)} / {_esc(result.model_class)}</h1>
+<p>Model file: <code>{_esc(result.model_file)}</code> | llama.cpp commit: \
+<code>{_esc(result.llama_cpp_commit)}</code> | schema: \
+<code>{_esc(result.schema_version)}</code></p>
 {_caveat_html(result)}
 <section>
 <h2>Baseline vs. tuned</h2>
 {_comparison_chart("Generation throughput", baseline_gen, tuned_gen, "t/s")}
 {_comparison_chart("Prefill throughput", baseline_prefill, tuned_prefill, "t/s")}
-<p>Generation speedup: {result.speedup_gen_pct:+.1f}% | \
-Prefill speedup: {result.speedup_prefill_pct:+.1f}%</p>
+<p>Generation speedup: {_esc(f"{result.speedup_gen_pct:+.1f}")}% | \
+Prefill speedup: {_esc(f"{result.speedup_prefill_pct:+.1f}")}%</p>
 </section>
 <section>
 <h2>Chip ISA features</h2>
@@ -162,9 +171,10 @@ Prefill speedup: {result.speedup_prefill_pct:+.1f}%</p>
 <section>
 <h2>Methodology</h2>
 <ul>
-<li>Repetitions per config: {result.budget.reps} \
-(prompt_n={result.budget.prompt_n}, gen_n={result.budget.gen_n})</li>
-<li>Wall-clock budget: {result.budget.total_seconds}s; actual elapsed: {result.elapsed_s:.1f}s</li>
+<li>Repetitions per config: {_esc(result.budget.reps)} \
+(prompt_n={_esc(result.budget.prompt_n)}, gen_n={_esc(result.budget.gen_n)})</li>
+<li>Wall-clock budget: {_esc(result.budget.total_seconds)}s; \
+actual elapsed: {_esc(f"{result.elapsed_s:.1f}")}s</li>
 </ul>
 </section>
 <section>

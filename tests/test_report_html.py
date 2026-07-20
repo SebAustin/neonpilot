@@ -53,3 +53,44 @@ def test_render_html_escapes_untrusted_text_fields(sample_sweep_result, sample_c
     rendered = render_html(sample_sweep_result, hostile_chip)
     assert "<script>alert(1)</script>" not in rendered
     assert "&lt;script&gt;" in rendered
+
+
+def test_render_html_escapes_numeric_and_bool_fields(sample_sweep_result, sample_chip_report):
+    """SECURITY.md F9: numeric/bool fields (config.threads, ISA `present`, fast-path `active`)
+    must be escaped too, not just string fields -- belt-and-braces on top of F1's hydration
+    type-checking. Dataclasses don't enforce field types at construction time, so a directly
+    constructed (not hydrated-from-JSON) object with markup smuggled into a declared bool/int
+    field is exactly the scenario F1 closes at the hydration boundary; this proves the
+    renderer itself is *also* safe even if that boundary were ever bypassed."""
+    import dataclasses
+
+    from neonpilot.models import FastPathNote
+
+    hostile_isa = dict(sample_chip_report.isa)
+    hostile_isa["neon"] = "<img src=x onerror=alert(1)>"  # type: ignore[assignment]
+    hostile_note = FastPathNote(
+        feature="dotprod",
+        kernel="k",
+        active="<b>true</b>",
+        why="ok",  # type: ignore[arg-type]
+    )
+    hostile_chip = dataclasses.replace(
+        sample_chip_report, isa=hostile_isa, fast_paths=[hostile_note]
+    )
+
+    hostile_trial = dataclasses.replace(
+        sample_sweep_result.best,
+        config=dataclasses.replace(sample_sweep_result.best.config, threads="<i>8</i>"),  # type: ignore[arg-type]
+    )
+    hostile_result = dataclasses.replace(
+        sample_sweep_result, best=hostile_trial, trials=[hostile_trial]
+    )
+
+    rendered = render_html(hostile_result, hostile_chip)
+
+    assert "<img src=x onerror=alert(1)>" not in rendered
+    assert "&lt;img src=x onerror=alert(1)&gt;" in rendered
+    assert "<b>true</b>" not in rendered
+    assert "&lt;b&gt;true&lt;/b&gt;" in rendered
+    assert "<i>8</i>" not in rendered
+    assert "&lt;i&gt;8&lt;/i&gt;" in rendered
