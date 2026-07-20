@@ -62,3 +62,69 @@ record it here" rule. None of these change a dataclass field name/type from PLAN
 comment and is used *only* to unit-test the SME2 code path in `fastpath.explain`/
 `macos_sysctl.read_chip_report`. It must be replaced with a real M5 `sysctl -a` capture during
 milestone M5 (ASSUMPTIONS.md #6); it is never presented as measured hardware data.
+
+# Build notes — deviations from PLAN.md (M3-M4)
+
+8. **`search/planner.plan` builds Stage B/C candidates with a *placeholder* thread count
+   (the chip's P-core count), not the actual Stage A winner.** PLAN.md section 1.2 types
+   `planner.plan(chip, budget) -> SearchPlan` as a pure function of the probe snapshot and the
+   budget -- it has no access to *measured* results, so it cannot know Stage A's real winner
+   ahead of time. `search/engine.py` uses `dataclasses.replace(cfg, threads=stage_a_winner....)`
+   to substitute the real winning thread count (and, for Stage C, the real winning
+   flash_attn/cache_type) into each Stage B/C candidate immediately before benching it. This
+   is the only way to reconcile "planner is pure" (section 1.2) with "Stage B varies fa/kv
+   with threads=A*" (section 4.1) without planner depending on engine internals.
+
+9. **`search/engine.run`'s `run_bench`/`cooldown_fn` are keyword-only injected parameters, not
+   part of the frozen `SweepContext`.** This matches `SweepContext`'s own docstring comment in
+   PLAN.md section 1.3 ("runner is dependency-injected as a callable so engine is unit-testable
+   with a mock") -- a callable can't live in a frozen, JSON-serializable dataclass, so it's
+   threaded through as a `run()` keyword argument instead, defaulting to the real
+   `bench.runner.run_bench` / `bench.thermal.cooldown`.
+
+10. **Candidate-level early-stop pruning is generalized, not per-knob-monotonic.** PLAN.md
+    section 4.3 describes pruning as "the current best dominates a candidate AND the remaining
+    candidates are monotonically worse along the swept axis" (a per-stage, per-knob condition).
+    This implementation applies a conservative superset of that rule: whenever the running
+    incumbent (best trial anywhere in the sweep so far, updated after each trial) statistically
+    dominates a just-measured candidate, the *rest of that candidate's stage* is pruned
+    immediately, without a separate per-knob monotonicity check. This prunes at least as
+    eagerly as the plan's literal rule and never prunes a candidate already benched; it trades
+    a small amount of specificity (it could in principle prune a stage slightly earlier than a
+    hand-tuned per-knob rule would) for a simple, uniform, fully-tested implementation across
+    all three stages. See `search/_stage_runner.py` and `tests/test_stage_runner.py`/
+    `tests/test_engine.py` for the exact semantics and worked examples.
+
+11. **Budget truncation only ever drops Stage C and/or the confirm pass, never Stage A/B.**
+    PLAN.md section 4.4 states the drop order as "adaptive extras -> Stage C -> confirm pass"
+    and separately notes "Stage A and Stage B (the gain-bearing knobs) are dropped last" as a
+    theoretical last resort. This implementation stops at "never drop A/B": with the documented
+    budgets (180s CI / 900s full-model, section 4.4's worst-case table), Stage A/B never come
+    close to needing truncation, so a pathological "budget so tiny even Stage A doesn't fit"
+    path is deliberately not implemented. If it's ever hit, the engine still completes Stage A/B
+    in full (not silently truncating further) rather than degrading measurement quality beyond
+    what `budget_truncated`/`dropped_stages` already communicate honestly.
+
+12. **`cli.py`'s default cooldown is budget-aware** (3s fixed/cap for `--budget <= 300`, 20s
+    above that), rather than always using the full-model 20s default from PLAN.md section 4.4.
+    Using a flat 20s regardless of `--budget` would make a CI-scale (180s) `optimize` run spend
+    ~15 gaps * 20s = 300s on cooldown alone -- more than the entire CI budget -- which
+    contradicts the plan's own stated CI cooldown default of 3s (section 4.4: "fixed_delay_s
+    (default 20s full-model / 3s CI)"). A `--cooldown-s` override is also exposed for explicit
+    control (e.g. `--cooldown-s 0` in the fast CLI unit tests, so they never really sleep).
+
+13. **`neonpilot apply`'s positional argument is dual-purpose**: if it points at an existing,
+    loadable preset JSON file, `apply` validates and prints that preset's invocation (FR4:
+    "apply can re-emit the exact llama-bench invocation for a stored preset"); otherwise it
+    packages `--run-dir`'s (or the latest run's) winning config as a *new* preset under
+    `--presets-root` (FR4: "apply writes ... a presets/<chip-id>/<model-class>.json file").
+    PLAN.md's CLI stub table doesn't fully disambiguate these two documented `apply` behaviors
+    into separate flags/subcommands, so this implementation reconciles them into one command
+    with branching logic, documented in the command's own `--help` text.
+
+14. **`Preset.chip.probed_at`/`TrialResult.started_at`/`ended_at` etc. are real wall-clock ISO
+    timestamps in production, but golden-file tests (`tests/test_report_*.py`,
+    `tests/test_preset_*.py`) use a fixture (`sample_chip_report`, `sample_sweep_result` in
+    `tests/conftest.py`) with all timestamps frozen to a fixed string.** `report/markdown.py`
+    and `report/html.py` never call `datetime.now()` themselves (they are pure functions of
+    their inputs), so this is purely a test-fixture concern, not a production behavior change.
