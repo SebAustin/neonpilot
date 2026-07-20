@@ -128,3 +128,68 @@ milestone M5 (ASSUMPTIONS.md #6); it is never presented as measured hardware dat
     `tests/conftest.py`) with all timestamps frozen to a fixed string.** `report/markdown.py`
     and `report/html.py` never call `datetime.now()` themselves (they are pure functions of
     their inputs), so this is purely a test-fixture concern, not a production behavior change.
+
+# Test-engineer pass — baseline-credibility investigation (M0-M4 audit)
+
+15. **Investigated: a real 180s-budget `optimize` run on SmolLM2-135M reported
+    `speedup_gen_pct=+394.2%`** -- implausible for thread/KV/flash-attn tuning alone (expected
+    magnitude per the task brief: single to low-double-digit %). Checked every suspect named in
+    the audit brief:
+    - **Wrong baseline thread count?** No. `bench/runner.build_argv` omits `-t/-ctk/-ctv/-fa/-b/
+      -ub` entirely when `cfg is None` (verified by a new test,
+      `test_baseline_argv_omits_every_tuning_flag`), so the baseline call really does let
+      llama.cpp resolve its own defaults. Ran the real pinned binary directly with no `-t` flag
+      on this machine: `n_threads=8, type_k=type_v=f16, flash_attn=-1 (auto), n_batch=2048,
+      n_ubatch=512` -- exactly what `search/_trial.BASELINE_DISPLAY_CONFIG` assumes and exactly
+      PLAN.md section 0's verified M1 Max default. No drift found; locked in by
+      `tests/test_baseline_credibility.py::test_baseline_display_config_matches_llama_cpp_defaults_on_m1_max`
+      and `::test_real_llama_bench_fixture_confirms_m1_max_defaults`.
+    - **pp/tg row mix-up in the parser?** No. `bench/parser._classify` and
+      `search/_trial.execute_trial`'s `next(s for s in samples if s.test_type == "pp"/"tg")`
+      selection are type-based, not index-based, and produce the same `(prefill, generation)`
+      assignment regardless of which order llama-bench emits the two rows in -- verified with a
+      new test that feeds both orderings (`test_execute_trial_never_mixes_up_pp_and_tg_regardless_of_row_order`)
+      plus pp-only/tg-only response tests that assert the *other* field stays `None` rather than
+      falling back to the wrong sample.
+    - **Cold-start/model-load included in the first measurement?** Partially relevant, but not a
+      code defect: `search/engine._run_confirm_or_fallback` DOES re-measure the baseline
+      back-to-back with the winner in the confirm pass specifically to cancel out cold-start/
+      warm-cache bias (PLAN.md section 9); this ran to completion (no truncation) on the
+      reproduction below.
+    - **Actual root cause, reproduced on real hardware:** ran
+      `uv run neonpilot optimize --budget 180 --reps 2` against the real pinned llama-bench
+      binary and the real SmolLM2-135M-Instruct-Q4_K_M model twice. Both real runs completed
+      the full sweep (`budget_truncated=False`) and finished under budget
+      (`elapsed_s≈148s`), so this was not a confirm-pass-truncation artifact. The captured
+      per-config samples show **enormous intra-config variance** on this dev laptop, e.g. one
+      Stage A trial's two reps for the *same* config were `[18.9114, 5.95587]` t/s (a 3.2x
+      spread) and a different Stage A trial's generation throughput dropped from 76.6 t/s
+      (threads=6, run first) to 13.1 t/s (threads=8, run seconds later) -- a swing far larger
+      than any thread-count effect could plausibly produce, consistent with thermal/CPU-
+      frequency or background-process contention noise on the shared dev machine, not a
+      configuration difference. With `--reps 2` (below PLAN.md section 4.3's documented "reps
+      >= 3" minimum) a single unlucky baseline rep paired with a single lucky candidate rep is
+      arithmetically sufficient to produce a 300-400% "speedup" that is pure sampling noise.
+      Neither engine nor parser logic is at fault; the tool simply had no guard against
+      presenting a noise-dominated ratio as an authoritative headline number.
+    - **Fix applied (minimal, no measurement-math change):** reused the exact same
+      `bench.stats.dominates()` statistical-dominance test the engine already uses for
+      early-stopping (PLAN.md section 4.3, k=1.0) as a **reporting-time credibility guard**:
+      `report/markdown.py` and `report/html.py` now append a "Statistical caution" caveat
+      whenever `not dominates(result.best, result.baseline)`, and `cli.py`'s console summary
+      prints the same warning plus a separate warning whenever `--reps` is below the
+      documented minimum of 3. This makes an implausible/noisy headline number impossible to
+      miss without changing how baseline or candidates are measured. Golden report fixtures
+      are unaffected (`sample_sweep_result`'s confirm pass, 40->60 t/s at stddev=1.0, clearly
+      dominates, so the caveat does not fire on the existing golden files).
+    - **Re-run after the fix:** re-ran `uv run neonpilot optimize --budget 180 --reps 2`
+      against the real binary/model a third time; result was `speedup_gen_pct=+54.9%` with
+      `budget_truncated=False` (full sweep + confirm pass ran) -- still elevated for a
+      thread/KV-tuning story (a 135M model's decode throughput is small-enough-magnitude that
+      Stage A/B/C's own variance across trials was itself double-digit-percent on this noisy
+      machine), and the new caveat correctly fired given the underlying samples' overlapping
+      confidence bands. **Recommendation for the M5 real-hardware run (Qwen2.5-3B, the actual
+      SC2 reference model): use `--reps >= 3` (the documented/CLI default) and run on an
+      otherwise-idle machine** -- the 135M CI model at `--reps 2` is a stress-test of the
+      credibility guard, not evidence of a code defect, and is not the model SC2 is measured
+      against.
