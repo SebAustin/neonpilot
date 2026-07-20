@@ -48,6 +48,14 @@ push to `main` and every pull request, and must be green before merge.
 The preset registry (`presets/<chip-id>/<model-class>.json`) is a community deliverable — anyone
 with Arm hardware can contribute a measured, versioned preset without touching Python code.
 
+**Policy: presets must come from an otherwise-idle machine** — run the sweep with nothing else
+competing for CPU (no Docker/VMs/heavy background apps), since the report's own
+ambient-load/variance caveat (the "statistical caution" note, and a wide prefill stddev) is the
+check that a run wasn't contaminated by system load; see
+[`docs/results/m1-max-loaded-20260720/`](./docs/results/m1-max-loaded-20260720/) for a worked
+example of a real, honestly-labeled run that was correctly *not* packaged as a preset for this
+reason.
+
 1. **Set up neonpilot** on the target chip per the [README quickstart](./README.md#setup-instructions)
    (clone, `uv sync --locked --extra dev`, `bash scripts/fetch_llama.sh`, download a model).
 2. **Run the sweep:**
