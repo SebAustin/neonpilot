@@ -69,3 +69,9 @@ markers = [
 [tool.coverage.run]
 source = ["neonpilot"]
 omit = ["*/vendor/*"]
+
+[tool.coverage.report]
+# Coverage floor 80% (REQUIREMENTS.md SC5 / PLAN.md section 7), enforced here so any
+# `--cov` invocation (CI's explicit --cov-fail-under=80, or a plain local `make test`) fails
+# below the floor -- not only when the flag happens to be passed on the command line.
+fail_under = 80
