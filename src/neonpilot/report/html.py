@@ -9,7 +9,17 @@ from __future__ import annotations
 
 import html
 
+from neonpilot.bench.stats import dominates
 from neonpilot.models import ChipReport, SweepResult, TrialResult
+
+#: Baseline-credibility guard (docs/dev/build-notes.md item 15) -- see report/markdown.py's
+#: `_LOW_CONFIDENCE_NOTE` for the full rationale. Plain text (no Markdown bold) for HTML.
+_LOW_CONFIDENCE_NOTE = (
+    "Statistical caution: the measured generation speedup does not clear the dominance margin "
+    "used for early-stopping -- baseline and tuned throughput confidence bands overlap (k=1.0, "
+    "PLAN.md section 4.3). Treat the headline percentage as noisy, not proven; consider "
+    "re-running with more repetitions (--reps) or on a quieter machine before trusting it."
+)
 
 _CHART_WIDTH = 440
 _BAR_HEIGHT = 26
@@ -86,16 +96,19 @@ def _trial_row(trial: TrialResult) -> str:
 
 
 def _caveat_html(result: SweepResult) -> str:
-    if not result.budget_truncated:
-        return ""
-    dropped = ", ".join(result.dropped_stages)
-    text = f"Budget truncated -- dropped: {html.escape(dropped)}."
-    if "confirm" in result.dropped_stages:
-        text += (
-            " Confirm pass skipped: the speedup figures below use sweep-phase samples, "
-            "not a back-to-back confirm measurement."
-        )
-    return f'<p class="caveat">{text}</p>'
+    parts = []
+    if result.budget_truncated:
+        dropped = ", ".join(result.dropped_stages)
+        text = f"Budget truncated -- dropped: {html.escape(dropped)}."
+        if "confirm" in result.dropped_stages:
+            text += (
+                " Confirm pass skipped: the speedup figures below use sweep-phase samples, "
+                "not a back-to-back confirm measurement."
+            )
+        parts.append(f'<p class="caveat">{text}</p>')
+    if not dominates(result.best, result.baseline):
+        parts.append(f'<p class="caveat">{html.escape(_LOW_CONFIDENCE_NOTE)}</p>')
+    return "".join(parts)
 
 
 def render_html(result: SweepResult, chip: ChipReport) -> str:

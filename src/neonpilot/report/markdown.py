@@ -6,6 +6,7 @@ dates come from the data itself), so it's golden-file testable.
 
 from __future__ import annotations
 
+from neonpilot.bench.stats import dominates
 from neonpilot.models import ChipReport, SweepResult, TrialResult
 
 _DEGRADED_CONFIRM_NOTE = (
@@ -13,6 +14,18 @@ _DEGRADED_CONFIRM_NOTE = (
     "speedup figure below is computed from sweep-phase samples (baseline vs. best candidate), "
     "not a back-to-back confirm measurement. Treat it as a lower-confidence estimate "
     "(PLAN.md section 4.4)."
+)
+
+#: Baseline-credibility guard (docs/dev/build-notes.md item 15): the headline speedup percentage
+#: can look large-but-spurious when the underlying samples are noisy (e.g. too few reps, thermal
+#: variance). `dominates()` is the same statistical-dominance test the engine already uses for
+#: early-stopping (PLAN.md section 4.3, k=1.0) -- reusing it here means the report never claims a
+#: speedup that the sweep's own pruning logic wouldn't consider "proven".
+_LOW_CONFIDENCE_NOTE = (
+    "**Statistical caution:** the measured generation speedup does not clear the dominance "
+    "margin used for early-stopping -- baseline and tuned throughput confidence bands overlap "
+    "(k=1.0, PLAN.md section 4.3). Treat the headline percentage as noisy, not proven; consider "
+    "re-running with more repetitions (`--reps`) or on a quieter machine before trusting it."
 )
 
 
@@ -75,6 +88,8 @@ def _methodology_section(result: SweepResult) -> str:
         lines.append(f"- **Budget truncated.** Dropped: {', '.join(result.dropped_stages)}.")
         if "confirm" in result.dropped_stages:
             lines.append(f"- {_DEGRADED_CONFIRM_NOTE}")
+    if not dominates(result.best, result.baseline):
+        lines.append(f"- {_LOW_CONFIDENCE_NOTE}")
     return "\n".join(lines)
 
 

@@ -19,6 +19,7 @@ from rich.console import Console
 
 from neonpilot import __version__, artifacts
 from neonpilot._llama_pin import LLAMA_CPP_COMMIT
+from neonpilot.bench.stats import dominates
 from neonpilot.models import (
     SCHEMA_VERSION,
     CooldownPolicy,
@@ -50,6 +51,11 @@ _DEFAULT_PROMPT_N = 512
 _DEFAULT_GEN_N = 128
 _DEFAULT_TIMEOUT_S = 120
 _DEFAULT_PRESETS_ROOT = Path("presets")
+
+#: Baseline-credibility guard (docs/dev/build-notes.md item 15): PLAN.md section 4.3/FR2 say
+#: "reps >= 3"; below that, a single unlucky/lucky rep can dominate the reported average on a
+#: noisy machine, producing an implausible headline speedup number.
+_MIN_RECOMMENDED_REPS = 3
 
 #: Cooldown defaults (PLAN.md section 4.4): 20s cap for a full-model run, 3s for a CI-scale
 #: budget. `_CI_BUDGET_THRESHOLD_S` picks the CI default whenever --budget looks CI-sized,
@@ -186,6 +192,12 @@ def optimize(
     console.print(
         f"[bold]neonpilot optimize[/bold]: {chip.chip_name}, budget={budget}s, reps={reps}"
     )
+    if reps < _MIN_RECOMMENDED_REPS:
+        console.print(
+            f"[yellow]warning: --reps={reps} is below the recommended minimum of "
+            f"{_MIN_RECOMMENDED_REPS}; measurements may be noisy "
+            "(see PLAN.md section 4.3).[/yellow]"
+        )
     result = engine.run(search_plan, ctx)
 
     artifacts.dump(chip, run_dir / "chip.json")
@@ -203,6 +215,11 @@ def optimize(
     if result.budget_truncated:
         console.print(
             f"[yellow]budget truncated -- dropped stages: {result.dropped_stages}[/yellow]"
+        )
+    if not dominates(result.best, result.baseline):
+        console.print(
+            "[yellow]warning: speedup may not be statistically significant -- baseline/tuned "
+            "confidence bands overlap (see report methodology).[/yellow]"
         )
     console.print(f"run dir: {run_dir}")
 
