@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Vendored llama.cpp (fetched by scripts/fetch_llama_cpp.sh, pinned)
+vendor/
+
+# Models and local run artifacts
+*.gguf
+runs/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
