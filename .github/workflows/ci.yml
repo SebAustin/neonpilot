@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# SECURITY.md F6: least-privilege default; jobs here only need to read the checkout and
+# report their own status, never write to the repo or other resources.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: macos-14
@@ -13,8 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v3
-      - name: Install deps
-        run: uv pip install --system -e ".[dev]"
+      - name: Install deps (from the committed lockfile -- SECURITY.md F3)
+        run: uv sync --locked --extra dev
       - name: ruff check
         run: uv run ruff check .
       - name: ruff format --check
@@ -27,8 +32,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v3
-      - name: Install deps
-        run: uv pip install --system -e ".[dev]"
+      - name: Install deps (from the committed lockfile -- SECURITY.md F3)
+        run: uv sync --locked --extra dev
       - name: pytest (unit only, coverage floor 80%)
         run: uv run pytest --cov=neonpilot --cov-report=term-missing --cov-fail-under=80
 
@@ -39,8 +44,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v3
-      - name: Install deps
-        run: uv pip install --system -e ".[dev]"
+      - name: Install deps (from the committed lockfile -- SECURITY.md F3)
+        run: uv sync --locked --extra dev
       - name: Install cmake
         run: brew install cmake
       - name: Cache llama-bench build
@@ -48,20 +53,27 @@ jobs:
         with:
           path: vendor/llama.cpp/build
           key: ${{ runner.os }}-b10069-cpuonly
-      - name: Build pinned llama.cpp (skips if cache hit at pinned SHA)
+      # SECURITY.md F4/F8: fetch_llama.sh verifies a .pin stamp (cache-restore path) and the
+      # checked-out SHA (fresh-clone path), rebuilding on any mismatch -- this step is safe to
+      # run unconditionally, whether the cache above hit or missed.
+      - name: Build pinned llama.cpp (skips if pin stamp / checkout SHA matches)
         run: ./scripts/fetch_llama.sh
       - name: Cache tiny model
         uses: actions/cache@v4
         with:
           path: ~/.neonpilot/models
           key: smollm2-135m-instruct-q4_k_m
-      - name: Fetch tiny model if missing
+      - name: "Fetch + verify tiny model (SECURITY.md F7: pinned sha256 checksum)"
+        env:
+          MODEL_SHA256: ed5fa30c487b282ec156c29062f1222e5c20875a944ac98289dbd242e947f747
+          MODEL_PATH: /Users/runner/.neonpilot/models/SmolLM2-135M-Instruct-Q4_K_M.gguf
         run: |
           mkdir -p ~/.neonpilot/models
-          if [ ! -f ~/.neonpilot/models/SmolLM2-135M-Instruct-Q4_K_M.gguf ]; then
-            curl -L -o ~/.neonpilot/models/SmolLM2-135M-Instruct-Q4_K_M.gguf \
+          if [ ! -f "$MODEL_PATH" ]; then
+            curl -L -o "$MODEL_PATH" \
               "https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
           fi
+          echo "$MODEL_SHA256  $MODEL_PATH" | shasum -a 256 -c -
       - name: Integration tests
         env:
           NEONPILOT_INTEGRATION: "1"
