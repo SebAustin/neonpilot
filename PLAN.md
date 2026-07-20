@@ -477,7 +477,7 @@ presentational only.
   measurement already in progress. Pruned trials are shown greyed-out in the report (methodology
   transparency).
 
-### 4.4 Cooldown, budget, and the <15-min proof
+### 4.4 Cooldown, budget, and the <15-min projection (hard-capped by truncation)
 
 **Reference full-model run:** **Qwen2.5-3B-Instruct Q4_K_M (~2.1 GB, spike S5)**. Workload pinned:
 `prompt_n = 512`, `gen_n = 128`, `reps = 3`. These are recorded in `SweepBudget` and the preset so
@@ -520,9 +520,12 @@ where the gains live) likely. We avoid that:
 
 **Truncation as last-resort only.** `engine.run` tracks elapsed and projects remaining cost. If — and
 only if — the projection would still blow the 900 s ceiling, it drops work in this order:
-`confirm pass → Stage C → adaptive extras`, sets `budget_truncated=True`, and appends the dropped
-label to `dropped_stages`. Stage A and Stage B (the gain-bearing knobs) are dropped last, and the
-report flags any truncation explicitly.
+`adaptive extras → Stage C → confirm pass`, sets `budget_truncated=True`, and appends the dropped
+label to `dropped_stages`. The confirm pass is dropped *after* Stage C because §9's headline SC2
+number depends on the back-to-back confirm measurement for warm-vs-cold fairness; if confirm is
+ever dropped, the report must state that the speedup figure is baseline-vs-best from sweep samples
+(degraded measurement quality), not a confirmed back-to-back pair. Stage A and Stage B (the
+gain-bearing knobs) are dropped last, and the report flags any truncation explicitly.
 
 ---
 
@@ -685,7 +688,7 @@ CI.
 | R8 | **`cmake` absent / build fails on clean machine** | Med/High | `scripts/setup.sh` + README run `brew install cmake` (installed in S2); CI installs explicitly; build cached on SHA with cold-build fallback (§7.1); setup script fails fast with a clear message | Low |
 | R9 | **Malformed/hostile community preset** | Low/Med | `schema.validate` gates all loads; `apply` re-emits a command for user review, doesn't blind-exec | Low |
 | R10 | **Tiny CI model too small to show KV/fa deltas** | Low/Low | **Moot for CI:** SmolLM2-135M-Instruct Q4_K_M (101 MB, spike S5) — CI checks *structure* only (well-formed artifacts, budget), never a performance delta; real deltas are proven on the Qwen2.5-3B reference model | None material |
-| R11 | **Cooldown consumes the 15-min budget**, forcing truncation of gain-bearing Stage B/C | Med/High | Adaptive/idle-skip cooldown with 20 s cap (§4.4) reclaims ~150–300 s; smaller 2.1 GB reference model halves load time; truncation order drops confirm→C before A/B; worst-case budget table shows fit (~668 s) without truncation | Low |
+| R11 | **Cooldown consumes the 15-min budget**, forcing truncation of gain-bearing Stage B/C | Med/High | Adaptive/idle-skip cooldown with 20 s cap (§4.4) reclaims ~150–300 s; smaller 2.1 GB reference model halves load time; truncation order drops extras→C→confirm before A/B (confirm protected for SC2 fairness); worst-case budget table shows fit (~668 s) without truncation | Low |
 
 ---
 
@@ -773,3 +776,8 @@ SC2 is comparative, so the baseline must be fair and pinned — not a strawman.
   5. **Real pin filled.** Tag `b10069` = SHA `178a6c44937154dc4c4eff0d166f4a044c4fceba` in §3.2
      fetch script and §3.1/§1.3 `LLAMA_CPP_COMMIT`, so `test_pin.py` has real matching values.
      `ASSUMPTIONS.md` #4 and the credential table updated.
+- _2026-07-20 — v3.1 (critic PASS at 98/100; two sanctioned polish edits applied by orchestrator)._
+  §4.4 heading softened from "proof" to "projection (hard-capped by truncation)" — the per-config
+  throughput figures are estimates until M5 calibrates them. Truncation order reversed to
+  `adaptive extras → Stage C → confirm pass` so the §9 back-to-back confirm measurement (SC2
+  fairness) is dropped last, with a mandated report caveat if it ever is; R11 updated to match.
