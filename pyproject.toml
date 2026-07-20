@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neonpilot"
+version = "0.1.0"
+description = "Probe Arm CPUs, auto-tune llama.cpp runtime flags, and ship reproducible presets."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "neonpilot contributors" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "typer>=0.12,<1.0",
+    "rich>=13.7,<14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-cov>=5.0,<6.0",
+    "ruff>=0.6,<1.0",
+]
+
+[project.scripts]
+neonpilot = "neonpilot.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/neonpilot/neonpilot"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neonpilot"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+exclude = ["vendor"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "SIM", # simplify
+]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["neonpilot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: gated integration tests; require NEONPILOT_INTEGRATION=1 and a built llama-bench binary",
+]
+
+[tool.coverage.run]
+source = ["neonpilot"]
+omit = ["*/vendor/*"]

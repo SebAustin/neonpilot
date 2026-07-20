@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Install deps
+        run: uv pip install --system -e ".[dev]"
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+  test:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Install deps
+        run: uv pip install --system -e ".[dev]"
+      - name: pytest (unit only, coverage floor 80%)
+        run: uv run pytest --cov=neonpilot --cov-report=term-missing --cov-fail-under=80
+
+  integration:
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Install deps
+        run: uv pip install --system -e ".[dev]"
+      - name: Install cmake
+        run: brew install cmake
+      - name: Cache llama-bench build
+        uses: actions/cache@v4
+        with:
+          path: vendor/llama.cpp/build
+          key: ${{ runner.os }}-b10069-cpuonly
+      - name: Build pinned llama.cpp (skips if cache hit at pinned SHA)
+        run: ./scripts/fetch_llama.sh
+      - name: Cache tiny model
+        uses: actions/cache@v4
+        with:
+          path: ~/.neonpilot/models
+          key: smollm2-135m-instruct-q4_k_m
+      - name: Fetch tiny model if missing
+        run: |
+          mkdir -p ~/.neonpilot/models
+          if [ ! -f ~/.neonpilot/models/SmolLM2-135M-Instruct-Q4_K_M.gguf ]; then
+            curl -L -o ~/.neonpilot/models/SmolLM2-135M-Instruct-Q4_K_M.gguf \
+              "https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+          fi
+      - name: Integration tests
+        env:
+          NEONPILOT_INTEGRATION: "1"
+        run: uv run pytest -m integration
