@@ -72,3 +72,38 @@ def test_row_with_neither_prompt_nor_gen_raises():
 def test_row_not_an_object_raises():
     with pytest.raises(BenchParseError, match="expected a JSON object"):
         parse("[42]")
+
+
+@pytest.mark.parametrize("bad_value", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_avg_ts_raises(bad_value):
+    """M1: `json.loads` accepts NaN/Infinity/-Infinity by default (non-RFC-8259 extension) --
+    a NaN/Infinity avg_ts must be rejected, not silently propagated into result.json/SVG."""
+    bad_row = (
+        f'[{{"n_prompt": 64, "n_gen": 0, "avg_ts": {bad_value}, '
+        '"stddev_ts": 0.1, "samples_ts": [1.0]}]'
+    )
+    with pytest.raises(BenchParseError, match="finite, non-negative"):
+        parse(bad_row)
+
+
+def test_non_finite_stddev_ts_raises():
+    bad_row = '[{"n_prompt": 64, "n_gen": 0, "avg_ts": 1.0, "stddev_ts": NaN, "samples_ts": [1.0]}]'
+    with pytest.raises(BenchParseError, match="finite, non-negative"):
+        parse(bad_row)
+
+
+def test_non_finite_sample_in_samples_ts_raises():
+    bad_row = (
+        '[{"n_prompt": 64, "n_gen": 0, "avg_ts": 1.0, '
+        '"stddev_ts": 0.1, "samples_ts": [1.0, Infinity]}]'
+    )
+    with pytest.raises(BenchParseError, match="finite, non-negative"):
+        parse(bad_row)
+
+
+def test_negative_avg_ts_raises():
+    bad_row = (
+        '[{"n_prompt": 64, "n_gen": 0, "avg_ts": -1.0, "stddev_ts": 0.1, "samples_ts": [1.0]}]'
+    )
+    with pytest.raises(BenchParseError, match="finite, non-negative"):
+        parse(bad_row)

@@ -10,6 +10,7 @@ so callers (the future `search/engine.py`) can catch one exception type and reco
 from __future__ import annotations
 
 import json
+import math
 
 from neonpilot.models import BenchSample
 
@@ -30,6 +31,16 @@ def _classify(row: dict) -> str:
     raise BenchParseError(f"row has neither n_prompt nor n_gen > 0: {row!r}")
 
 
+def _finite_nonnegative(value: float, field_name: str, row: dict) -> float:
+    """Reject NaN/Infinity/-Infinity and negative values (M1: `json.loads` accepts the
+    non-RFC-8259 tokens "NaN"/"Infinity"/"-Infinity" by default, and llama-bench emitting one
+    -- e.g. a division-by-zero on a pathological config -- would otherwise silently propagate
+    into a non-RFC-8259 result.json and an SVG `<rect width="nan">` in the HTML report)."""
+    if not math.isfinite(value) or value < 0:
+        raise BenchParseError(f"{field_name} must be a finite, non-negative number: {row!r}")
+    return value
+
+
 def _validate_row(row: object) -> dict:
     if not isinstance(row, dict):
         raise BenchParseError(f"expected a JSON object per row, got {type(row).__name__}")
@@ -41,11 +52,15 @@ def _validate_row(row: object) -> dict:
     try:
         int(row["n_prompt"])
         int(row["n_gen"])
-        float(row["avg_ts"])
-        float(row["stddev_ts"])
-        [float(sample) for sample in row["samples_ts"]]
+        avg_ts = float(row["avg_ts"])
+        stddev_ts = float(row["stddev_ts"])
+        samples_ts = [float(sample) for sample in row["samples_ts"]]
     except (TypeError, ValueError) as exc:
         raise BenchParseError(f"row has non-numeric field: {row!r}") from exc
+    _finite_nonnegative(avg_ts, "avg_ts", row)
+    _finite_nonnegative(stddev_ts, "stddev_ts", row)
+    for sample in samples_ts:
+        _finite_nonnegative(sample, "samples_ts", row)
     return row
 
 
