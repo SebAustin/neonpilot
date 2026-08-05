@@ -38,6 +38,16 @@ def sample_chip_report():
     return _with_fixed_probed_at(report)
 
 
+@pytest.fixture
+def sample_chip_report_m5():
+    """A synthetic ChipReport (M5, i8mm+SME2 present) with all timestamps fixed, for the F-B
+    compare command's golden-file tests -- see sysctl_apple_m5_synthetic.txt's own header
+    comment: hand-authored, NOT a real hardware capture, never presented as a measurement."""
+    text = (FIXTURES_DIR / "sysctl_apple_m5_synthetic.txt").read_text(encoding="utf-8")
+    report = read_chip_report(text)
+    return _with_fixed_probed_at(report)
+
+
 def _with_fixed_probed_at(report):
     import dataclasses
 
@@ -125,6 +135,48 @@ def sample_sweep_result():
         speedup_gen_pct=50.0,
         speedup_prefill_pct=80.0,
         elapsed_s=42.5,
+        budget=budget,
+        budget_truncated=False,
+        dropped_stages=[],
+    )
+
+
+@pytest.fixture
+def sample_sweep_result_m5():
+    """A second, distinct synthetic SweepResult (faster than `sample_sweep_result`'s M1-like
+    numbers) paired with `sample_chip_report_m5`, for the F-B compare command's golden-file
+    tests. Not a real hardware measurement -- see docs/dev/build-notes.md."""
+    from neonpilot.models import SweepResult
+
+    baseline_cfg = _cfg(threads=10)
+    tuned_cfg = _cfg(
+        threads=14,
+        cache_type_k="q8_0",
+        cache_type_v="q8_0",
+        flash_attn="on",
+        batch=4096,
+        ubatch=2048,
+    )
+
+    b1 = _trial("A1", "A", _cfg(threads=12), gen_ts=90.0, prefill_ts=250.0)
+    b2 = _trial("A2", "A", _cfg(threads=10), status="pruned")
+    confirm_baseline = _trial(
+        "confirm-baseline", "confirm", baseline_cfg, gen_ts=80.0, prefill_ts=200.0
+    )
+    confirm_best = _trial("confirm-best", "confirm", tuned_cfg, gen_ts=136.0, prefill_ts=360.0)
+
+    budget = SweepBudget(total_seconds=180, reps=2, prompt_n=64, gen_n=32)
+    return SweepResult(
+        schema_version=SCHEMA_VERSION,
+        model_file="SmolLM2-135M-Instruct-Q4_K_M.gguf",
+        model_class="smollm2-135m-instruct-q4_k_m",
+        llama_cpp_commit="178a6c44937154dc4c4eff0d166f4a044c4fceba",
+        baseline=confirm_baseline,
+        trials=[b1, b2, confirm_baseline, confirm_best],
+        best=confirm_best,
+        speedup_gen_pct=70.0,
+        speedup_prefill_pct=80.0,
+        elapsed_s=38.2,
         budget=budget,
         budget_truncated=False,
         dropped_stages=[],
