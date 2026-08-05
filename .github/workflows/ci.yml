@@ -39,7 +39,9 @@ jobs:
 
   integration:
     runs-on: macos-14
-    timeout-minutes: 25
+    # 45 min: a cold llama.cpp build takes ~26 min on the shared 3-core macos-14 runner
+    # (measured 2026-08-05, run #1); warm-cache runs finish in a few minutes.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -48,8 +50,10 @@ jobs:
         run: uv sync --locked --extra dev
       - name: Install cmake
         run: brew install cmake
-      - name: Cache llama-bench build
-        uses: actions/cache@v4
+      # restore/save are split so the expensive build is cached even when a later step
+      # fails or the job times out (combined actions/cache only saves on job success).
+      - name: Restore llama-bench build cache
+        uses: actions/cache/restore@v4
         with:
           path: vendor/llama.cpp/build
           key: ${{ runner.os }}-b10069-cpuonly
@@ -58,6 +62,12 @@ jobs:
       # run unconditionally, whether the cache above hit or missed.
       - name: Build pinned llama.cpp (skips if pin stamp / checkout SHA matches)
         run: ./scripts/fetch_llama.sh
+      - name: Save llama-bench build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: vendor/llama.cpp/build
+          key: ${{ runner.os }}-b10069-cpuonly
       - name: Cache tiny model
         uses: actions/cache@v4
         with:
