@@ -13,14 +13,28 @@ from neonpilot.bench.parser import BenchParseError
 from neonpilot.bench.runner import BenchRunError
 from neonpilot.models import BenchSample, RuntimeConfig, SweepContext, ThermalSnapshot, TrialResult
 
-#: Best-effort reconstruction of llama.cpp's own defaults for the baseline trial's `.config`
-#: display field. `BenchSample` (PLAN.md section 1.3) does not carry n_threads/type_k/type_v/
-#: flash_attn, so this is NOT parsed from the actual JSON response -- see docs/dev/build-notes.md.
-BASELINE_DISPLAY_CONFIG = RuntimeConfig(
-    threads=8, cache_type_k="f16", cache_type_v="f16", flash_attn="auto", batch=2048, ubatch=512
-)
-
 RunBenchFn = Callable[[str, str, RuntimeConfig | None, int, int, int, int], list[BenchSample]]
+
+
+def baseline_display_config(threads: int) -> RuntimeConfig:
+    """Best-effort reconstruction of llama.cpp's own resolved defaults for the baseline
+    trial's `.config` display field (robustness review H3).
+
+    `BenchSample` (PLAN.md section 1.3) does not carry n_threads/type_k/type_v/flash_attn, so
+    this is NOT parsed from the actual JSON response. `threads` comes from
+    `SweepContext.baseline_threads` (the caller's best estimate of llama.cpp's own default,
+    typically the chip's P-core count) rather than a hardcoded constant, so it's no longer
+    silently wrong on a non-8-P-core chip. The resulting `TrialResult.is_synthetic_config` is
+    always set True by `execute_trial` for this config -- see docs/dev/build-notes.md.
+    """
+    return RuntimeConfig(
+        threads=threads,
+        cache_type_k="f16",
+        cache_type_v="f16",
+        flash_attn="auto",
+        batch=2048,
+        ubatch=512,
+    )
 
 
 def execute_trial(
@@ -38,7 +52,8 @@ def execute_trial(
         running average trial cost for budget projection (PLAN.md section 4.4).
     """
     started_at = datetime.now(UTC).isoformat()
-    display_config = cfg if cfg is not None else BASELINE_DISPLAY_CONFIG
+    is_synthetic = cfg is None
+    display_config = cfg if cfg is not None else baseline_display_config(ctx.baseline_threads)
     start = time.monotonic()
     try:
         samples = run_bench(
@@ -64,6 +79,7 @@ def execute_trial(
             thermal=thermal_snapshot,
             status="error",
             error=str(exc),
+            is_synthetic_config=is_synthetic,
         )
         return trial, duration
 
@@ -82,6 +98,7 @@ def execute_trial(
         thermal=thermal_snapshot,
         status="ok",
         error=None,
+        is_synthetic_config=is_synthetic,
     )
     return trial, duration
 

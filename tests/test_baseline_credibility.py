@@ -42,7 +42,7 @@ from neonpilot.models import (
 from neonpilot.probe.macos_sysctl import read_chip_report
 from neonpilot.report.html import render_html
 from neonpilot.report.markdown import render_markdown
-from neonpilot.search._trial import BASELINE_DISPLAY_CONFIG, execute_trial
+from neonpilot.search._trial import baseline_display_config, execute_trial
 
 
 def _m1_max_chip(fixture_text):
@@ -97,13 +97,14 @@ def test_baseline_display_config_matches_llama_cpp_defaults_on_m1_max(fixture_te
     against the real pinned binary (spike S4). A regression here (e.g. threads silently pinned
     to 1) would invalidate every baseline-vs-tuned comparison."""
     chip = _m1_max_chip(fixture_text)
+    cfg = baseline_display_config(chip.p_cores)
 
-    assert BASELINE_DISPLAY_CONFIG.threads == chip.p_cores == 8
-    assert BASELINE_DISPLAY_CONFIG.cache_type_k == "f16"
-    assert BASELINE_DISPLAY_CONFIG.cache_type_v == "f16"
-    assert BASELINE_DISPLAY_CONFIG.flash_attn == "auto"
-    assert BASELINE_DISPLAY_CONFIG.batch == 2048
-    assert BASELINE_DISPLAY_CONFIG.ubatch == 512
+    assert cfg.threads == chip.p_cores == 8
+    assert cfg.cache_type_k == "f16"
+    assert cfg.cache_type_v == "f16"
+    assert cfg.flash_attn == "auto"
+    assert cfg.batch == 2048
+    assert cfg.ubatch == 512
 
 
 def test_baseline_argv_omits_every_tuning_flag():
@@ -237,14 +238,15 @@ def test_low_confidence_note_absent_when_speedup_clearly_dominates(
 def test_real_llama_bench_fixture_confirms_m1_max_defaults(fixture_text):
     """Cross-check against the real captured `llama-bench -o json` fixture (spike S4): even
     when a config IS passed (`-t 8 -ctk f16 ...`), the resolved JSON fields must match what
-    BASELINE_DISPLAY_CONFIG assumes for "no flags passed" on this exact reference machine --
-    otherwise the display config and the real resolved config could silently diverge."""
+    `baseline_display_config(8)` assumes for "no flags passed" on this exact reference machine
+    -- otherwise the display config and the real resolved config could silently diverge."""
     import json
 
+    cfg = baseline_display_config(8)  # M1 Max P-core count
     rows = json.loads(fixture_text("llama_bench_smollm2.json"))
     for row in rows:
-        assert row["n_threads"] == BASELINE_DISPLAY_CONFIG.threads
-        assert row["type_k"] == BASELINE_DISPLAY_CONFIG.cache_type_k
-        assert row["type_v"] == BASELINE_DISPLAY_CONFIG.cache_type_v
-        assert row["n_batch"] == BASELINE_DISPLAY_CONFIG.batch
-        assert row["n_ubatch"] == BASELINE_DISPLAY_CONFIG.ubatch
+        assert row["n_threads"] == cfg.threads
+        assert row["type_k"] == cfg.cache_type_k
+        assert row["type_v"] == cfg.cache_type_v
+        assert row["n_batch"] == cfg.batch
+        assert row["n_ubatch"] == cfg.ubatch

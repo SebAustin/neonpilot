@@ -96,6 +96,15 @@ class TrialResult:
     thermal: ThermalSnapshot | None
     status: str  # "ok" | "pruned" | "error"
     error: str | None
+    # Extension beyond PLAN.md section 1.3's original contract -- see docs/dev/build-notes.md
+    # (robustness review H3). True only for the baseline/confirm-baseline trials (cfg=None):
+    # `.config` there is a *reconstruction* of what llama.cpp is expected to resolve to (not
+    # parsed from the actual JSON response -- BenchSample carries no n_threads/type_k/type_v/
+    # flash_attn), so it must never be treated as a measured, appliable config (e.g. packaged
+    # into a Preset). Defaults to False so every pre-existing construction site/serialized
+    # artifact is unaffected; `_hydrate.from_dict` fills this in from the field default when
+    # hydrating an older result.json that predates this field.
+    is_synthetic_config: bool = False
 
 
 @dataclass(frozen=True)
@@ -141,6 +150,15 @@ class SweepContext:
     cooldown: CooldownPolicy
     timeout_s: int  # per-invocation hard timeout for the runner
     llama_cpp_commit: str  # pinned SHA (recorded into SweepResult)
+    # Extension beyond PLAN.md section 1.3 (robustness review H3): the thread count llama.cpp
+    # is expected to resolve to when no `-t` flag is given (its own default heuristic is the
+    # chip's P-core count). Used only to build a plausible `TrialResult.config` *display* value
+    # for the baseline/confirm-baseline trials (`is_synthetic_config=True`) -- never used to
+    # build actual argv (the baseline call omits `-t` entirely, letting llama.cpp resolve its
+    # own default). Defaults to 8 (the previously-hardcoded value) so existing callers/tests
+    # that don't care about baseline display accuracy are unaffected; `cli.py` always passes
+    # the real probed `chip.p_cores`.
+    baseline_threads: int = 8
 
 
 @dataclass(frozen=True)
