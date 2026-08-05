@@ -300,3 +300,48 @@ milestone M5 (ASSUMPTIONS.md #6); it is never presented as measured hardware dat
       `timeout_s` fires. Accepted for the same reason as the existing rlimit note in that file
       (local, single-user, no privilege boundary) rather than replacing it with a custom
       bounded-read `Popen` loop.
+
+# Phase 2 (approved scope): load telemetry (F-A) + compare command (F-B)
+
+17. **F-A load telemetry.** New `bench/sysload.py` mirrors `probe/collector.py`'s split: a
+    pure `parse_ps_output()` parser for `ps -Ao pcpu,comm -r` (skips the header row by
+    checking whether each line's first token parses as a float, not a fixed line count;
+    handles `comm` values containing spaces, e.g. a macOS app-bundle path with a
+    parenthesized helper-process suffix) and a thin `collect_load_snapshot()` collector
+    (`os.getloadavg()` + the top-3 `ps` rows) that degrades to an empty process list on a
+    `ps` failure rather than raising -- this telemetry is a report-caveat nice-to-have, never
+    worth failing a sweep over. New frozen dataclasses `ProcessSample`/`LoadSnapshot`;
+    `SweepResult.load_before`/`load_after: LoadSnapshot | None = None` are additive (both
+    default `None`), so `tests/test_artifacts.py`'s new backward-compat test confirms the
+    already-committed `docs/results/m1-max-loaded-20260720/result.json` (which predates this
+    field, `is_synthetic_config`, and `baseline_threads` entirely) still hydrates cleanly.
+    `search/engine.run()` gains an injected `collect_load` callable (same DI pattern as
+    `run_bench`/`cooldown_fn`, defaulting to the real collector), called once before the
+    baseline trial and once after the confirm pass. `cli.optimize` preflights
+    `loadavg_1m / chip.total_cores`: above 0.5 it warns (citing the exact ratio); a new
+    `--strict-idle` flag aborts with `Exit(1)` instead, before any run directory is created.
+    Both report emitters render a "Measurement conditions" methodology line (via a new
+    shared `report/_shared.py:measurement_conditions_text()`) whenever `load_before` was
+    recorded, omitting the line entirely otherwise (no blank/misleading placeholder).
+
+18. **F-B compare command.** `neonpilot compare <run_dir_a> <run_dir_b>` writes `compare.md` +
+    a self-contained `compare.html` (into `run_dir_a` by default, `--out` to override; the
+    target directory is created if it doesn't exist yet -- caught by a regression test before
+    it shipped, since `report`/`apply` never needed this, always writing into an
+    already-existing run dir). Both artifact loads go through the same
+    `cli._load_run_artifacts` helper `report`/`apply --run-dir` use, so a missing/truncated
+    artifact on *either* side gets the same friendly message + `Exit(1)`, not a raw
+    traceback, from day one. `report/compare.py` renders: a chip ISA feature table with
+    delta-highlighted rows (a CSS class in HTML, a "Differs" column in Markdown) for any
+    feature present on only one side; each machine's own baseline-vs-tuned throughput
+    charts, reusing `report/_shared.py`'s SVG bar-chart helpers (extracted from `report/
+    html.py` in a preceding pure-refactor commit -- `_esc`/`_bar`/`_comparison_chart`/
+    `_CHART_WIDTH` etc. became `report/_shared.py`'s public `esc`/`bar`/`comparison_chart`,
+    with zero behavior change, confirmed by the unchanged-except-for-one-new-CSS-rule golden
+    `report.html` diff); a winning-config field-by-field diff table (threads, KV cache
+    type(s), flash-attn, batch/ubatch); and each side's F-A measurement conditions when
+    recorded. Golden-file tests use two synthetic `SweepResult`s: the existing M1-like
+    `sample_sweep_result` and a new M5-like `sample_sweep_result_m5` (paired with
+    `sample_chip_report_m5`, itself derived from the already-committed, clearly-labeled-
+    synthetic `sysctl_apple_m5_synthetic.txt` fixture -- never presented as a real
+    measurement, consistent with that fixture's own header comment).
