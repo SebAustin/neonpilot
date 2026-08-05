@@ -162,6 +162,28 @@ class SweepContext:
 
 
 @dataclass(frozen=True)
+class ProcessSample:
+    """One row from `ps -Ao pcpu,comm -r` (`bench/sysload.py`): a top CPU consumer at a point
+    in time. Feature F-A, additive to PLAN.md's original contract; see
+    docs/dev/build-notes.md."""
+
+    pcpu: float  # % CPU, as reported by `ps`
+    comm: str  # command/process name
+
+
+@dataclass(frozen=True)
+class LoadSnapshot:
+    """Host load telemetry (`bench/sysload.py`) -- feature F-A, additive to PLAN.md's original
+    contract; see docs/dev/build-notes.md. Lets a report cite recorded ambient-load numbers
+    instead of a purely qualitative caveat."""
+
+    loadavg_1m: float
+    loadavg_5m: float
+    loadavg_15m: float
+    top_processes: list[ProcessSample]  # top-3 CPU consumers, highest first
+
+
+@dataclass(frozen=True)
 class SweepResult:
     """Final output of a search/engine.run() sweep."""
 
@@ -178,6 +200,13 @@ class SweepResult:
     budget: SweepBudget
     budget_truncated: bool  # True iff a stage/confirm pass was dropped to fit budget
     dropped_stages: list[str]  # e.g. ["C", "confirm"]; [] when nothing dropped
+    # Additive (feature F-A): host load telemetry recorded at sweep start/end, so a report can
+    # cite recorded numbers in its ambient-load caveat instead of a purely qualitative warning.
+    # Optional and defaulted to None so older result.json artifacts (predating this field)
+    # still hydrate -- see tests/test_hydrate.py's backward-compatibility test against the
+    # committed docs/results/m1-max-loaded-20260720/result.json.
+    load_before: LoadSnapshot | None = None
+    load_after: LoadSnapshot | None = None
 
 
 @dataclass(frozen=True)
