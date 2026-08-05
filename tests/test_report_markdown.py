@@ -41,6 +41,18 @@ def test_render_markdown_omits_caveat_when_not_truncated(sample_sweep_result, sa
     assert "Methodology caveat" not in rendered
 
 
+def test_render_markdown_labels_synthetic_winning_config(sample_sweep_result, sample_chip_report):
+    """H3: a synthetic (baseline-reconstruction) winning config must never be rendered as a
+    concretely-measured one."""
+    import dataclasses
+
+    synthetic_best = dataclasses.replace(sample_sweep_result.best, is_synthetic_config=True)
+    truncated = dataclasses.replace(sample_sweep_result, best=synthetic_best)
+    rendered = render_markdown(truncated, sample_chip_report)
+    assert "defaults (as resolved by llama-bench" in rendered
+    assert "Winning config: threads=" not in rendered
+
+
 def test_render_markdown_is_pure_no_live_timestamps(sample_sweep_result, sample_chip_report):
     """Calling twice with the same inputs must produce byte-identical output."""
     first = render_markdown(sample_sweep_result, sample_chip_report)

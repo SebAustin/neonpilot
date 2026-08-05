@@ -55,6 +55,18 @@ def test_render_html_escapes_untrusted_text_fields(sample_sweep_result, sample_c
     assert "&lt;script&gt;" in rendered
 
 
+def test_render_html_labels_synthetic_winning_config(sample_sweep_result, sample_chip_report):
+    """H3: a synthetic (baseline-reconstruction) winning config must never be rendered as a
+    concretely-measured one."""
+    import dataclasses
+
+    synthetic_best = dataclasses.replace(sample_sweep_result.best, is_synthetic_config=True)
+    truncated = dataclasses.replace(sample_sweep_result, best=synthetic_best)
+    rendered = render_html(truncated, sample_chip_report)
+    assert "defaults (as resolved by llama-bench" in rendered
+    assert "Winning config: threads=" not in rendered
+
+
 def test_render_html_escapes_numeric_and_bool_fields(sample_sweep_result, sample_chip_report):
     """SECURITY.md F9: numeric/bool fields (config.threads, ISA `present`, fast-path `active`)
     must be escaped too, not just string fields -- belt-and-braces on top of F1's hydration

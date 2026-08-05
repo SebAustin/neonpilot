@@ -11,6 +11,7 @@ import html
 
 from neonpilot.bench.stats import dominates
 from neonpilot.models import ChipReport, SweepResult, TrialResult
+from neonpilot.report._shared import winning_config_text
 
 #: Baseline-credibility guard (docs/dev/build-notes.md item 15) -- see report/markdown.py's
 #: `_LOW_CONFIDENCE_NOTE` for the full rationale. Plain text (no Markdown bold) for HTML.
@@ -175,6 +176,7 @@ Prefill speedup: {_esc(f"{result.speedup_prefill_pct:+.1f}")}%</p>
 (prompt_n={_esc(result.budget.prompt_n)}, gen_n={_esc(result.budget.gen_n)})</li>
 <li>Wall-clock budget: {_esc(result.budget.total_seconds)}s; \
 actual elapsed: {_esc(f"{result.elapsed_s:.1f}")}s</li>
+<li>Winning config: {_esc(winning_config_text(result.best))}</li>
 </ul>
 </section>
 <section>
