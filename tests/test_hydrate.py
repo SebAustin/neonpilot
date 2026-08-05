@@ -156,6 +156,109 @@ def test_from_dict_rejects_non_list_value_for_list_field():
         from_dict(BenchSample, data)
 
 
+def test_from_dict_fills_missing_field_from_plain_default():
+    """Robustness review H3/backward-compat: a JSON payload predating an additive field (e.g.
+    an old result.json written before `TrialResult.is_synthetic_config` existed) must still
+    hydrate, using the dataclass's own declared default rather than raising."""
+    from neonpilot.models import RuntimeConfig, ThermalSnapshot, TrialResult
+
+    cfg = RuntimeConfig(
+        threads=8, cache_type_k="f16", cache_type_v="f16", flash_attn="auto", batch=2048, ubatch=512
+    )
+    trial = TrialResult(
+        trial_id="A1",
+        stage="A",
+        config=cfg,
+        prefill=None,
+        generation=None,
+        reps=3,
+        started_at="2026-07-20T00:00:00Z",
+        ended_at="2026-07-20T00:00:01Z",
+        thermal=ThermalSnapshot(
+            source="idle-skip", cpu_temp_c=None, throttled=None, cooldown_s=0.0
+        ),
+        status="ok",
+        error=None,
+    )
+    data = dataclasses.asdict(trial)
+    del data["is_synthetic_config"]  # simulate a pre-H3 artifact that predates this field
+
+    rehydrated = from_dict(TrialResult, data)
+    assert rehydrated.is_synthetic_config is False
+
+
+def test_from_dict_fills_missing_field_from_default_factory():
+    """Same lenient-default mechanism as above, but for a `default_factory=` field (none of
+    neonpilot's real dataclasses currently use one, so this exercises the branch directly with
+    a local fixture dataclass to keep it covered by regression tests)."""
+
+    @dataclasses.dataclass(frozen=True)
+    class _WithFactoryDefault:
+        name: str
+        tags: list[str] = dataclasses.field(default_factory=list)
+
+    rehydrated = from_dict(_WithFactoryDefault, {"name": "x"})
+    assert rehydrated.tags == []
+
+
+def test_from_dict_rejects_non_dict_value_for_dict_field():
+    """M6: a dict-typed field (e.g. ChipReport.isa) must reject a non-dict value outright,
+    instead of accepting it and failing later with an obscure AttributeError deep inside a
+    report renderer that assumes `.items()` works."""
+    from neonpilot.models import ChipReport
+
+    data = {
+        "schema_version": "1.0.0",
+        "probed_at": "2026-07-20T00:00:00Z",
+        "platform": "darwin",
+        "chip_name": "Apple M1 Max",
+        "chip_id": "apple-m1-max",
+        "cpu_brand": "Apple M1 Max",
+        "p_cores": 8,
+        "e_cores": 2,
+        "total_cores": 10,
+        "ram_gb": 64.0,
+        "isa": "not-a-dict",
+        "fast_paths": [],
+        "raw": {},
+    }
+    with pytest.raises(TypeError, match="expected a dict"):
+        from_dict(ChipReport, data)
+
+
+def test_from_dict_validates_dict_value_types():
+    """M6: not just the dict's own shape, but every value inside it, must match the declared
+    value type -- a forged `"isa": {"i8mm": "yes"}` (string instead of bool) is rejected here."""
+    from neonpilot.models import ChipReport
+
+    data = {
+        "schema_version": "1.0.0",
+        "probed_at": "2026-07-20T00:00:00Z",
+        "platform": "darwin",
+        "chip_name": "Apple M1 Max",
+        "chip_id": "apple-m1-max",
+        "cpu_brand": "Apple M1 Max",
+        "p_cores": 8,
+        "e_cores": 2,
+        "total_cores": 10,
+        "ram_gb": 64.0,
+        "isa": {"i8mm": "yes"},
+        "fast_paths": [],
+        "raw": {},
+    }
+    with pytest.raises(TypeError, match="expected bool"):
+        from_dict(ChipReport, data)
+
+
+def test_from_dict_accepts_well_formed_dict_field(fixture_text):
+    original = read_chip_report(fixture_text("sysctl_apple_m1_max.txt"))
+    data = dataclasses.asdict(original)
+    rehydrated = from_dict(type(original), data)
+    assert rehydrated.isa == original.isa
+    assert isinstance(rehydrated.isa, dict)
+    assert all(isinstance(v, bool) for v in rehydrated.isa.values())
+
+
 def test_from_dict_handles_optional_nested_dataclass_field():
     from neonpilot.models import RuntimeConfig, ThermalSnapshot, TrialResult
 

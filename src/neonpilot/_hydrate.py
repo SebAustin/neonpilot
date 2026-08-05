@@ -28,7 +28,13 @@ _STRICT_SCALAR_TYPES = (bool, int, float, str)
 def from_dict(cls: type, data: object) -> object:
     """Reconstruct a `cls` dataclass instance from a plain dict (as produced by `json.loads`).
 
-    :raises TypeError: if `data` is missing required fields or a value has the wrong shape.
+    A field missing from `data` is only tolerated when the dataclass itself declares a default
+    (`default=` or `default_factory=`) -- this is what lets a *new*, additive field (e.g.
+    `TrialResult.is_synthetic_config`, `SweepResult.load_before/after`) hydrate cleanly from an
+    older artifact that predates it, without silently defaulting genuinely required fields.
+
+    :raises TypeError: if `data` is missing a required (no-default) field, or a value has the
+        wrong shape/type.
     """
     if data is None:
         return None
@@ -40,9 +46,14 @@ def from_dict(cls: type, data: object) -> object:
     hints = typing.get_type_hints(cls)
     kwargs = {}
     for field in dataclasses.fields(cls):
-        if field.name not in data:
+        if field.name in data:
+            kwargs[field.name] = _convert(hints[field.name], data[field.name])
+        elif field.default is not dataclasses.MISSING:
+            kwargs[field.name] = field.default
+        elif field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
+            kwargs[field.name] = field.default_factory()
+        else:
             raise TypeError(f"{cls.__name__} missing required field {field.name!r}")
-        kwargs[field.name] = _convert(hints[field.name], data[field.name])
     return cls(**kwargs)
 
 
@@ -61,6 +72,9 @@ def _convert(field_type: object, value: object) -> object:
         (item_type,) = typing.get_args(field_type)
         return [_convert(item_type, item) for item in value]
 
+    if origin is dict:
+        return _convert_dict(field_type, value)
+
     if dataclasses.is_dataclass(field_type):
         return from_dict(field_type, value)
 
@@ -68,6 +82,21 @@ def _convert(field_type: object, value: object) -> object:
         return _convert_scalar(field_type, value)
 
     return value
+
+
+def _convert_dict(field_type: object, value: object) -> dict:
+    """Validate a `dict[K, V]`-typed field (SECURITY.md M6): reject a non-dict outright, and
+    validate/convert every key and value against the declared `K`/`V` types, so e.g. a forged
+    `"isa": "not-a-dict"` fails loudly here instead of raising an obscure `AttributeError`
+    deep inside a report renderer that assumes `.items()` works."""
+    if not isinstance(value, dict):
+        raise TypeError(f"expected a dict, got {type(value).__name__}: {value!r}")
+    key_type, value_type = typing.get_args(field_type)
+    converted = {}
+    for key, item in value.items():
+        converted_key = _convert(key_type, key) if key_type in _STRICT_SCALAR_TYPES else key
+        converted[converted_key] = _convert(value_type, item)
+    return converted
 
 
 def _convert_scalar(field_type: type, value: object) -> object:
