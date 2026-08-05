@@ -89,6 +89,13 @@ class _BudgetTracker:
         self.dropped_stages.append(stage_to_drop)
         return True
 
+    def mark_partially_dropped(self, stage_name: str) -> None:
+        """Record that `stage_name` was cut short mid-stage (H6: a new candidate was never
+        started because the budget projection said it wouldn't fit) -- distinct from
+        `try_fit`'s all-or-nothing drop of an entire not-yet-started stage."""
+        self.budget_truncated = True
+        self.dropped_stages.append(stage_name)
+
 
 def _run_baseline(ctx: SweepContext, run_bench: RunBenchFn) -> tuple[TrialResult, float]:
     return execute_trial(
@@ -148,7 +155,7 @@ def run(
     tracker.record([baseline_duration])
     running_best = baseline_trial
 
-    stage_a_trials, durations_a, running_best = run_stage(
+    stage_a_trials, _durations_a, running_best, a_budget_exceeded = run_stage(
         stage_name="A",
         candidates=plan.stage_a,
         ctx=ctx,
@@ -156,14 +163,16 @@ def run(
         run_bench=run_bench,
         cooldown_fn=cooldown_fn,
         extras_dropped=tracker.extras_dropped,
+        budget_tracker=tracker,
     )
-    tracker.record(durations_a)
+    if a_budget_exceeded:
+        tracker.mark_partially_dropped("A")
     stage_a_winner = _selection.select_stage_a_winner(stage_a_trials, baseline_trial)
 
     stage_b_candidates = [
         replace(cfg, threads=stage_a_winner.config.threads) for cfg in plan.stage_b
     ]
-    stage_b_trials, durations_b, running_best = run_stage(
+    stage_b_trials, _durations_b, running_best, b_budget_exceeded = run_stage(
         stage_name="B",
         candidates=stage_b_candidates,
         ctx=ctx,
@@ -171,8 +180,10 @@ def run(
         run_bench=run_bench,
         cooldown_fn=cooldown_fn,
         extras_dropped=tracker.extras_dropped,
+        budget_tracker=tracker,
     )
-    tracker.record(durations_b)
+    if b_budget_exceeded:
+        tracker.mark_partially_dropped("B")
     stage_b_winner = _selection.select_stage_b_winner(stage_b_trials, stage_a_winner)
 
     stage_c_trials, stage_c_winner = _run_stage_c(
@@ -220,7 +231,7 @@ def _run_stage_c(plan, ctx, stage_a_winner, stage_b_winner, tracker, run_bench, 
         )
         for cfg in plan.stage_c
     ]
-    stage_c_trials, durations_c, _ = run_stage(
+    stage_c_trials, _durations_c, _, c_budget_exceeded = run_stage(
         stage_name="C",
         candidates=stage_c_candidates,
         ctx=ctx,
@@ -228,8 +239,10 @@ def _run_stage_c(plan, ctx, stage_a_winner, stage_b_winner, tracker, run_bench, 
         run_bench=run_bench,
         cooldown_fn=cooldown_fn,
         extras_dropped=tracker.extras_dropped,
+        budget_tracker=tracker,
     )
-    tracker.record(durations_c)
+    if c_budget_exceeded:
+        tracker.mark_partially_dropped("C")
     stage_c_winner = _selection.select_stage_c_winner(stage_c_trials, stage_b_winner)
     return stage_c_trials, stage_c_winner
 

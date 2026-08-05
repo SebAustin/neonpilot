@@ -246,6 +246,38 @@ def test_bench_error_does_not_crash_and_is_recorded(fixture_text):
 
 
 def test_budget_truncation_drops_stage_c_then_confirm(fixture_text, monkeypatch):
+    """A moderate budget that comfortably covers baseline+A+B but not C+confirm: isolates the
+    "confirm dropped LAST, after C" ordering guarantee (PLAN.md section 4.4's truncation order)
+    without also tripping H6's new mid-stage A/B pruning (see
+    test_extreme_budget_also_truncates_stage_a_and_b_mid_stage below for that scenario)."""
+    monkeypatch.setattr(time, "monotonic", TickingClock(step=1.0))
+    chip = _m1_max_chip(fixture_text)
+    ctx = _make_ctx(total_seconds=40, max_cooldown_s=0.0)
+    search_plan = planner.plan(chip, ctx.budget)
+    runner = RecordingRunner()
+
+    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+
+    assert result.budget_truncated is True
+    assert result.dropped_stages == ["C", "confirm"]  # confirm dropped LAST, after C
+    stage_a_trials = [t for t in result.trials if t.stage == "A"]
+    stage_b_trials = [t for t in result.trials if t.stage == "B"]
+    assert all(t.status == "ok" for t in stage_a_trials)  # A ran to completion, untouched
+    assert all(t.status == "ok" for t in stage_b_trials)  # B ran to completion, untouched
+    # H6: Stage C's own budget_tracker also stops starting new candidates mid-stage now, so not
+    # every C candidate is necessarily pruned (some may complete before the cutoff) -- what
+    # matters is that C didn't finish and confirm never started.
+    stage_c_trials = [t for t in result.trials if t.stage == "C"]
+    assert any(t.status == "pruned" for t in stage_c_trials)
+    assert not any(t.stage == "confirm" for t in result.trials)
+    # Degraded case: baseline field falls back to the initial baseline (no confirm pair ran).
+    assert result.baseline.trial_id == "baseline"
+
+
+def test_extreme_budget_also_truncates_stage_a_and_b_mid_stage(fixture_text, monkeypatch):
+    """Robustness review H6: with a budget so tiny that even a single trial's estimated cost
+    blows it, Stage A and B must ALSO stop starting new candidates (previously they always ran
+    to completion regardless of budget -- a measured 7.5x overrun on a 3s budget)."""
     monkeypatch.setattr(time, "monotonic", TickingClock(step=50.0))
     chip = _m1_max_chip(fixture_text)
     ctx = _make_ctx(total_seconds=10, max_cooldown_s=20.0)  # tiny budget, real cooldown cost
@@ -255,11 +287,10 @@ def test_budget_truncation_drops_stage_c_then_confirm(fixture_text, monkeypatch)
     result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
 
     assert result.budget_truncated is True
-    assert result.dropped_stages == ["C", "confirm"]  # confirm dropped LAST, after C
-    stage_c_trials = [t for t in result.trials if t.stage == "C"]
-    assert all(t.status == "pruned" for t in stage_c_trials)
+    # H6: A and B are cut short mid-stage too now, not just C/confirm -- confirm is still last.
+    assert result.dropped_stages == ["A", "B", "C", "confirm"]
+    assert any(t.stage == "A" and t.status == "pruned" for t in result.trials)
     assert not any(t.stage == "confirm" for t in result.trials)
-    # Degraded case: baseline field falls back to the initial baseline (no confirm pair ran).
     assert result.baseline.trial_id == "baseline"
 
 

@@ -10,6 +10,7 @@ candidate that's already been benched.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Protocol
 
 from neonpilot.bench.stats import dominates
 from neonpilot.bench.thermal import cooldown as default_cooldown
@@ -30,6 +31,14 @@ _SKIPPED_COOLDOWN = ThermalSnapshot(
 )
 
 
+class BudgetTracker(Protocol):
+    """Structural interface `run_stage` needs from `search/engine._BudgetTracker` (duck-typed
+    to avoid a circular import -- `engine.py` already imports this module)."""
+
+    def over_budget(self, remaining_trials: int) -> bool: ...
+    def record(self, durations: list[float]) -> None: ...
+
+
 def run_stage(
     *,
     stage_name: str,
@@ -39,22 +48,38 @@ def run_stage(
     run_bench: RunBenchFn,
     cooldown_fn: CooldownFn = default_cooldown,
     extras_dropped: bool = False,
-) -> tuple[list[TrialResult], list[float], TrialResult]:
+    budget_tracker: BudgetTracker | None = None,
+) -> tuple[list[TrialResult], list[float], TrialResult, bool]:
     """Bench each candidate in order, pruning the rest of the stage once the incumbent
     statistically dominates a just-measured candidate.
 
-    :return: `(trials, wall_seconds_per_trial, updated_incumbent)`. `trials` has one entry per
-        candidate (benched, pruned, or errored) -- pruning never drops a trial from the list,
-        only marks it `status="pruned"` without spending a subprocess call on it.
+    Robustness review H6: when `budget_tracker` is given, a NEW candidate is never *started*
+    once the tracker projects the remaining candidates in this stage would blow the budget --
+    the rest of the stage is marked `status="pruned"` instead (a trial already in flight is
+    still let to finish; this only stops *starting new* ones). Previously Stage A/B always ran
+    to completion regardless of budget, which could overrun a tiny budget by 7.5x in practice.
+
+    :return: `(trials, wall_seconds_per_trial, updated_incumbent, budget_exceeded)`. `trials`
+        has one entry per candidate (benched, pruned, or errored) -- pruning never drops a
+        trial from the list, only marks it `status="pruned"` without spending a subprocess
+        call on it. `budget_exceeded` is True iff the budget (not dominance) caused a prune.
     """
     trials: list[TrialResult] = []
     durations: list[float] = []
     current_best = incumbent
     prune_rest = False
+    budget_exceeded = False
 
     for index, cfg in enumerate(candidates, start=1):
         trial_id = f"{stage_name}{index}"
         if prune_rest:
+            trials.append(pruned_trial(cfg, stage_name, trial_id))
+            continue
+
+        remaining_including_this = len(candidates) - index + 1
+        if budget_tracker is not None and budget_tracker.over_budget(remaining_including_this):
+            budget_exceeded = True
+            prune_rest = True
             trials.append(pruned_trial(cfg, stage_name, trial_id))
             continue
 
@@ -69,10 +94,12 @@ def run_stage(
         )
         trials.append(trial)
         durations.append(duration)
+        if budget_tracker is not None:
+            budget_tracker.record([duration])
 
         if trial.status == "ok":
             if dominates(current_best, trial):
                 prune_rest = True
             current_best = better(current_best, trial)
 
-    return trials, durations, current_best
+    return trials, durations, current_best, budget_exceeded

@@ -79,7 +79,7 @@ def test_run_stage_benches_every_candidate_when_none_dominate():
         return _samples(gen_ts=20.0 + cfg.threads)  # mild, non-dominant spread
 
     incumbent = _baseline_incumbent(gen_ts=5.0)
-    trials, durations, best = run_stage(
+    trials, durations, best, budget_exceeded = run_stage(
         stage_name="A",
         candidates=candidates,
         ctx=_CTX,
@@ -92,6 +92,7 @@ def test_run_stage_benches_every_candidate_when_none_dominate():
     assert [t.status for t in trials] == ["ok", "ok", "ok"]
     assert best.config.threads == 8  # highest gen_ts (20+8=28)
     assert len(durations) == 3
+    assert budget_exceeded is False  # no budget_tracker given -> never triggers
 
 
 def test_run_stage_prunes_remaining_after_dominant_candidate():
@@ -108,7 +109,7 @@ def test_run_stage_prunes_remaining_after_dominant_candidate():
         return _samples(gen_ts=20.0, stddev=0.1)  # clearly beaten by that incumbent
 
     incumbent = _baseline_incumbent(gen_ts=5.0)
-    trials, durations, best = run_stage(
+    trials, durations, best, budget_exceeded = run_stage(
         stage_name="A",
         candidates=candidates,
         ctx=_CTX,
@@ -121,6 +122,7 @@ def test_run_stage_prunes_remaining_after_dominant_candidate():
     assert [t.status for t in trials] == ["ok", "ok", "pruned"]
     assert best.config.threads == 4
     assert len(durations) == 2
+    assert budget_exceeded is False  # this candidate was pruned by dominance, not budget
 
 
 def test_run_stage_pruned_trials_are_never_benched_but_retained():
@@ -134,7 +136,7 @@ def test_run_stage_pruned_trials_are_never_benched_but_retained():
         return _samples(gen_ts=20.0, stddev=0.01)
 
     incumbent = _baseline_incumbent(gen_ts=5.0)
-    trials, _, _ = run_stage(
+    trials, _, _, _ = run_stage(
         stage_name="B",
         candidates=candidates,
         ctx=_CTX,
@@ -160,7 +162,7 @@ def test_run_stage_marks_error_status_on_bench_failure():
         raise BenchRunError("boom")
 
     incumbent = _baseline_incumbent(gen_ts=5.0)
-    trials, durations, best = run_stage(
+    trials, durations, best, budget_exceeded = run_stage(
         stage_name="A",
         candidates=[_cfg(4)],
         ctx=_CTX,
@@ -172,6 +174,7 @@ def test_run_stage_marks_error_status_on_bench_failure():
     assert trials[0].error == "boom"
     assert best is incumbent  # incumbent unchanged; the errored trial can't win
     assert len(durations) == 1
+    assert budget_exceeded is False
 
 
 def test_run_stage_extras_dropped_uses_zero_cooldown_snapshot():
@@ -187,7 +190,7 @@ def test_run_stage_extras_dropped_uses_zero_cooldown_snapshot():
         return _samples(gen_ts=10.0)
 
     incumbent = _baseline_incumbent(gen_ts=5.0)
-    trials, _, _ = run_stage(
+    trials, _, _, _ = run_stage(
         stage_name="A",
         candidates=[_cfg(4)],
         ctx=_CTX,
