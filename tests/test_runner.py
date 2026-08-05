@@ -106,8 +106,33 @@ def test_run_bench_raises_on_missing_binary(monkeypatch):
         raise FileNotFoundError("no such file")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    with pytest.raises(BenchRunError, match="not found"):
+    with pytest.raises(BenchRunError, match="failed to spawn"):
         run_bench("does/not/exist", "model.gguf", None, reps=1, prompt_n=64, gen_n=0, timeout_s=30)
+
+
+def test_run_bench_raises_on_permission_error(monkeypatch):
+    """H1: a binary that exists but lacks the +x bit raises PermissionError, an OSError
+    subclass FileNotFoundError-only handling previously missed, crashing with a raw traceback."""
+
+    def fake_run(argv, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(BenchRunError, match="failed to spawn"):
+        run_bench("no-exec-bit", "model.gguf", None, reps=1, prompt_n=64, gen_n=0, timeout_s=30)
+
+
+def test_run_bench_raises_on_exec_format_error(monkeypatch):
+    """H1: an x86_64 binary run on arm64 (or similar) raises OSError("Exec format error")."""
+
+    def fake_run(argv, **kwargs):
+        raise OSError(8, "Exec format error")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(BenchRunError, match="failed to spawn"):
+        run_bench(
+            "wrong-arch-binary", "model.gguf", None, reps=1, prompt_n=64, gen_n=0, timeout_s=30
+        )
 
 
 def test_run_bench_never_uses_shell_true(monkeypatch):

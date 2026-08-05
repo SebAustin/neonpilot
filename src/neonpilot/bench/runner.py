@@ -64,7 +64,8 @@ def run_bench(
 ) -> list[BenchSample]:
     """Run one llama-bench invocation (covering all `reps`) and return parsed samples.
 
-    :raises BenchRunError: on a non-zero exit, a timeout, or a missing/unreadable binary.
+    :raises BenchRunError: on a non-zero exit, a timeout, or an OSError spawning the binary
+        (missing file, no execute permission, wrong architecture/exec format, etc.).
     :raises neonpilot.bench.parser.BenchParseError: if stdout is not well-formed JSON.
     """
     argv = build_argv(binary, model, cfg, reps, prompt_n, gen_n)
@@ -77,6 +78,12 @@ def run_bench(
         # duration, and platform-portable rlimit behavior (esp. RLIMIT_AS on macOS) is fiddly
         # enough that adding it here would be disproportionate engineering for a LOW/local-only
         # finding. Revisit if neonpilot ever benchmarks untrusted GGUFs on shared infrastructure.
+        #
+        # `capture_output=True` also has no cap on stdout/stderr size (robustness review, LOW,
+        # accepted): a llama-bench build that misbehaves and floods stdout could grow memory
+        # unbounded before `timeout_s` fires. Same reasoning as the rlimit note above applies --
+        # local, single-user, no privilege boundary -- so this is documented rather than fixed
+        # with a custom bounded-read Popen loop.
         result = subprocess.run(  # noqa: S603 -- fixed argv list, no shell, hard timeout
             argv,
             capture_output=True,
@@ -84,10 +91,16 @@ def run_bench(
             timeout=timeout_s,
             check=False,
         )
-    except FileNotFoundError as exc:
-        raise BenchRunError(f"llama-bench binary not found: {binary!r}") from exc
     except subprocess.TimeoutExpired as exc:
         raise BenchRunError(f"llama-bench timed out after {timeout_s}s: {argv}") from exc
+    except OSError as exc:
+        # Robustness review H1: FileNotFoundError alone missed PermissionError (binary exists
+        # but lacks +x), and "Exec format error" (e.g. an x86_64 binary on arm64) -- both are
+        # OSError subclasses raised by the OS when it can't actually exec the target, and both
+        # previously crashed the sweep with a raw traceback instead of a clean TrialResult
+        # error. OSError is the correct, documented superclass for "the OS refused to spawn
+        # this process" (covers FileNotFoundError too, so this replaces that narrower catch).
+        raise BenchRunError(f"failed to spawn llama-bench binary {binary!r}: {exc}") from exc
 
     if result.returncode != 0:
         raise BenchRunError(
