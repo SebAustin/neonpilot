@@ -23,8 +23,12 @@ class UnsafePresetPathError(ValueError):
     """Raised when a preset's `chip_id`/`model_class` would escape the presets root on disk."""
 
 
-def _sanitize_slug(value: str, field_name: str) -> str:
+def sanitize_slug(value: str, field_name: str) -> str:
     """Reject anything that isn't a safe, single path segment.
+
+    Public (not `_`-prefixed): robustness review M4 reuses this from `cli.py` to validate a
+    user-supplied `model_class` slug *before* a sweep starts, not just when a preset is later
+    saved -- catching a bad slug after 15 minutes of benchmarking is its own robustness bug.
 
     :raises UnsafePresetPathError: if `value` is empty, contains characters outside
         `[a-z0-9._-]`, or is exactly `.`/`..` (a traversal token that needs no separator).
@@ -45,7 +49,7 @@ def _sanitize_slug(value: str, field_name: str) -> str:
 def _resolved_under(root: Path, *parts: str) -> Path:
     """Join `parts` onto `root` and assert the resolved result stays under `root.resolve()`.
 
-    Belt-and-braces on top of `_sanitize_slug` (SECURITY.md F2): even if the slug allow-list
+    Belt-and-braces on top of `sanitize_slug` (SECURITY.md F2): even if the slug allow-list
     were ever loosened, a symlink or an unexpected traversal is still caught here.
     """
     root_resolved = root.resolve()
@@ -65,8 +69,8 @@ def save(preset: Preset, root: Path) -> Path:
         segments, e.g. a forged `chip_id="../../etc"` from a shared/tampered run directory.
     :return: the path written.
     """
-    chip_id = _sanitize_slug(preset.chip_id, "chip_id")
-    model_class = _sanitize_slug(preset.model_class, "model_class")
+    chip_id = sanitize_slug(preset.chip_id, "chip_id")
+    model_class = sanitize_slug(preset.model_class, "model_class")
 
     target_dir = _resolved_under(root, chip_id)
     path = _resolved_under(root, chip_id, f"{model_class}.json")
@@ -82,8 +86,8 @@ def load(chip_id: str, model_class: str, root: Path) -> Preset:
     :raises FileNotFoundError: if no preset exists at that path.
     :raises neonpilot.preset.schema.PresetValidationError: if the file fails validation.
     """
-    chip_id = _sanitize_slug(chip_id, "chip_id")
-    model_class = _sanitize_slug(model_class, "model_class")
+    chip_id = sanitize_slug(chip_id, "chip_id")
+    model_class = sanitize_slug(model_class, "model_class")
 
     path = _resolved_under(root, chip_id, f"{model_class}.json")
     if not path.exists():
