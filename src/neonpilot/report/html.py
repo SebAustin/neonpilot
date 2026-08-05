@@ -11,7 +11,7 @@ import html
 
 from neonpilot.bench.stats import dominates
 from neonpilot.models import ChipReport, SweepResult, TrialResult
-from neonpilot.report._shared import winning_config_text
+from neonpilot.report._shared import measurement_conditions_text, winning_config_text
 
 #: Baseline-credibility guard (docs/dev/build-notes.md item 15) -- see report/markdown.py's
 #: `_LOW_CONFIDENCE_NOTE` for the full rationale. Plain text (no Markdown bold) for HTML.
@@ -138,6 +138,10 @@ def render_html(result: SweepResult, chip: ChipReport) -> str:
         for note in chip.fast_paths
     )
     trial_rows = "".join(_trial_row(trial) for trial in result.trials)
+    conditions = measurement_conditions_text(result.load_before)
+    conditions_li = (
+        f"\n<li>Measurement conditions: {_esc(conditions)}</li>" if conditions is not None else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -176,7 +180,7 @@ Prefill speedup: {_esc(f"{result.speedup_prefill_pct:+.1f}")}%</p>
 (prompt_n={_esc(result.budget.prompt_n)}, gen_n={_esc(result.budget.gen_n)})</li>
 <li>Wall-clock budget: {_esc(result.budget.total_seconds)}s; \
 actual elapsed: {_esc(f"{result.elapsed_s:.1f}")}s</li>
-<li>Winning config: {_esc(winning_config_text(result.best))}</li>
+<li>Winning config: {_esc(winning_config_text(result.best))}</li>{conditions_li}
 </ul>
 </section>
 <section>

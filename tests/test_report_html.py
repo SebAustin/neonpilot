@@ -67,6 +67,36 @@ def test_render_html_labels_synthetic_winning_config(sample_sweep_result, sample
     assert "Winning config: threads=" not in rendered
 
 
+def test_render_html_omits_measurement_conditions_when_no_telemetry(
+    sample_sweep_result, sample_chip_report
+):
+    rendered = render_html(sample_sweep_result, sample_chip_report)
+    assert "Measurement conditions" not in rendered
+
+
+def test_render_html_shows_measurement_conditions_when_recorded(
+    sample_sweep_result, sample_chip_report
+):
+    """F-A: when load telemetry was recorded, the methodology section cites it (escaped)."""
+    import dataclasses
+
+    from neonpilot.models import LoadSnapshot, ProcessSample
+
+    with_load = dataclasses.replace(
+        sample_sweep_result,
+        load_before=LoadSnapshot(
+            loadavg_1m=1.5,
+            loadavg_5m=1.0,
+            loadavg_15m=0.8,
+            top_processes=[ProcessSample(pcpu=42.0, comm="<script>evil</script>")],
+        ),
+    )
+    rendered = render_html(with_load, sample_chip_report)
+    assert "Measurement conditions: loadavg(1m/5m/15m)=1.50/1.00/0.80" in rendered
+    assert "<script>evil</script>" not in rendered
+    assert "&lt;script&gt;evil&lt;/script&gt;" in rendered
+
+
 def test_render_html_escapes_numeric_and_bool_fields(sample_sweep_result, sample_chip_report):
     """SECURITY.md F9: numeric/bool fields (config.threads, ISA `present`, fast-path `active`)
     must be escaped too, not just string fields -- belt-and-braces on top of F1's hydration

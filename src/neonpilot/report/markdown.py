@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from neonpilot.bench.stats import dominates
 from neonpilot.models import ChipReport, SweepResult, TrialResult
-from neonpilot.report._shared import winning_config_text
+from neonpilot.report._shared import measurement_conditions_text, winning_config_text
 
 _DEGRADED_CONFIRM_NOTE = (
     "**Methodology caveat:** the confirm pass was dropped to fit the time budget, so the "
@@ -82,6 +82,9 @@ def _methodology_section(result: SweepResult) -> str:
         f"- llama.cpp commit: `{result.llama_cpp_commit}`",
         f"- Winning config: {winning_config_text(result.best)}",
     ]
+    conditions = measurement_conditions_text(result.load_before)
+    if conditions is not None:
+        lines.append(f"- Measurement conditions: {conditions}")
     if result.budget_truncated:
         lines.append(f"- **Budget truncated.** Dropped: {', '.join(result.dropped_stages)}.")
         if "confirm" in result.dropped_stages:
