@@ -12,14 +12,17 @@ from __future__ import annotations
 
 import statistics
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
 from neonpilot.bench import runner as bench_runner
+from neonpilot.bench.sysload import collect_load_snapshot as default_collect_load
 from neonpilot.bench.thermal import cooldown as default_cooldown
 from neonpilot.models import (
     SCHEMA_VERSION,
     BenchSample,
+    LoadSnapshot,
     SearchPlan,
     SweepContext,
     SweepResult,
@@ -29,6 +32,11 @@ from neonpilot.models import (
 from neonpilot.search import _selection
 from neonpilot.search._stage_runner import CooldownFn, run_stage
 from neonpilot.search._trial import RunBenchFn, execute_trial, pruned_trial
+
+#: Injected collector signature (feature F-A): a zero-arg callable returning a `LoadSnapshot`,
+#: mirroring the `RunBenchFn`/`CooldownFn` dependency-injection pattern already used here so
+#: tests never need a real `ps`/`os.getloadavg()` call.
+CollectLoadFn = Callable[[], LoadSnapshot]
 
 #: Worst-case config count with no pruning (PLAN.md section 4.1: "16 configs"), used as the
 #: initial average-trial-cost estimate before any real timing data exists.
@@ -142,14 +150,19 @@ def run(
     *,
     run_bench: RunBenchFn = bench_runner.run_bench,
     cooldown_fn: CooldownFn = default_cooldown,
+    collect_load: CollectLoadFn = default_collect_load,
 ) -> SweepResult:
     """Run the full staged sweep (baseline -> A -> B -> C -> confirm) and return a SweepResult.
 
     :param run_bench: injected so this is unit-testable with a deterministic fake (PLAN.md
         section 1.3's `SweepContext` comment: "runner is dependency-injected as a callable").
     :param cooldown_fn: injected for the same reason; defaults to the real adaptive cooldown.
+    :param collect_load: injected for the same reason (feature F-A); defaults to the real
+        `ps`/`os.getloadavg()`-backed collector. Called once at sweep start and once at sweep
+        end so a report can cite recorded ambient-load numbers.
     """
     tracker = _BudgetTracker(ctx)
+    load_before = collect_load()
 
     baseline_trial, baseline_duration = _run_baseline(ctx, run_bench)
     tracker.record([baseline_duration])
@@ -194,6 +207,7 @@ def run(
     final_baseline, best, confirm_trials = _run_confirm_or_fallback(
         ctx, baseline_trial, stage_c_winner, running_best, tracker, run_bench, cooldown_fn
     )
+    load_after = collect_load()
 
     all_trials = stage_a_trials + stage_b_trials + stage_c_trials + confirm_trials
     return SweepResult(
@@ -207,6 +221,8 @@ def run(
         speedup_gen_pct=_pct_speedup(best.generation, final_baseline.generation),
         speedup_prefill_pct=_pct_speedup(best.prefill, final_baseline.prefill),
         elapsed_s=tracker.elapsed(),
+        load_before=load_before,
+        load_after=load_after,
         budget=ctx.budget,
         budget_truncated=tracker.budget_truncated,
         dropped_stages=tracker.dropped_stages,

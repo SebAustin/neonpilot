@@ -12,7 +12,14 @@ import time
 import pytest
 
 from neonpilot.bench.runner import BenchRunError
-from neonpilot.models import BenchSample, CooldownPolicy, SweepBudget, SweepContext, ThermalSnapshot
+from neonpilot.models import (
+    BenchSample,
+    CooldownPolicy,
+    LoadSnapshot,
+    SweepBudget,
+    SweepContext,
+    ThermalSnapshot,
+)
 from neonpilot.probe.macos_sysctl import read_chip_report
 from neonpilot.search import engine, planner
 
@@ -39,6 +46,13 @@ def _make_ctx(
 
 def _fake_cooldown(policy):
     return ThermalSnapshot(source="idle-skip", cpu_temp_c=None, throttled=None, cooldown_s=0.0)
+
+
+def _fake_collect_load():
+    """Deterministic fake for feature F-A's injected load collector -- this module's docstring
+    promises no real subprocess ever runs here, and the default `collect_load` would otherwise
+    shell out to a real `ps`/`os.getloadavg()`."""
+    return LoadSnapshot(loadavg_1m=0.5, loadavg_5m=0.4, loadavg_15m=0.3, top_processes=[])
 
 
 def _m1_max_chip(fixture_text):
@@ -111,7 +125,13 @@ def test_full_sweep_stage_ordering_and_winner_selection(fixture_text):
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     trial_ids = [t.trial_id for t in result.trials]
     assert trial_ids == [
@@ -135,6 +155,38 @@ def test_full_sweep_stage_ordering_and_winner_selection(fixture_text):
     assert result.dropped_stages == []
 
 
+def test_run_records_load_snapshots_at_sweep_start_and_end(fixture_text):
+    """Feature F-A: `collect_load` is called once at sweep start and once at sweep end, and
+    both snapshots land in the returned SweepResult."""
+    chip = _m1_max_chip(fixture_text)
+    ctx = _make_ctx()
+    search_plan = planner.plan(chip, ctx.budget)
+    runner = RecordingRunner()
+    calls: list[str] = []
+
+    def counting_collect_load():
+        calls.append("call")
+        return LoadSnapshot(
+            loadavg_1m=float(len(calls)), loadavg_5m=0.0, loadavg_15m=0.0, top_processes=[]
+        )
+
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=counting_collect_load,
+    )
+
+    assert len(calls) == 2
+    assert result.load_before == LoadSnapshot(
+        loadavg_1m=1.0, loadavg_5m=0.0, loadavg_15m=0.0, top_processes=[]
+    )
+    assert result.load_after == LoadSnapshot(
+        loadavg_1m=2.0, loadavg_5m=0.0, loadavg_15m=0.0, top_processes=[]
+    )
+
+
 def test_stage_a_winner_is_highest_threads_for_this_score_fn(fixture_text):
     # Call order (16 total, per test_full_sweep_stage_ordering_and_winner_selection):
     # [0]=baseline(None), [1:5]=Stage A, [5:11]=Stage B, [11:14]=Stage C, [14:16]=confirm.
@@ -143,7 +195,13 @@ def test_stage_a_winner_is_highest_threads_for_this_score_fn(fixture_text):
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     stage_a_calls = runner.calls[1:5]
     assert {cfg.threads for cfg in stage_a_calls} == {6, 8, 9, 10}
@@ -158,7 +216,13 @@ def test_stage_c_configs_inherit_threads_fa_kv_from_a_and_b_winners(fixture_text
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     stage_c_calls = runner.calls[11:14]
     assert len(stage_c_calls) == 3
@@ -174,7 +238,13 @@ def test_best_and_speedup_reflect_confirm_pass(fixture_text):
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     assert result.best.trial_id == "confirm-best"
     assert result.baseline.trial_id == "confirm-baseline"
@@ -200,7 +270,13 @@ def test_early_stop_prunes_remaining_stage_a_candidates(fixture_text):
         return 20.0, 100.0
 
     runner = RecordingRunner(score_fn=score)
-    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     stage_a_trials = [t for t in result.trials if t.stage == "A"]
     assert [t.status for t in stage_a_trials] == ["ok", "ok", "pruned", "pruned"]
@@ -238,7 +314,13 @@ def test_bench_error_does_not_crash_and_is_recorded(fixture_text):
             ),
         ]
 
-    result = engine.run(search_plan, ctx, run_bench=run_bench, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=run_bench,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
     errored = [t for t in result.trials if t.status == "error"]
     assert len(errored) == 1
     assert errored[0].error == "simulated failure"
@@ -256,7 +338,13 @@ def test_budget_truncation_drops_stage_c_then_confirm(fixture_text, monkeypatch)
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     assert result.budget_truncated is True
     assert result.dropped_stages == ["C", "confirm"]  # confirm dropped LAST, after C
@@ -284,7 +372,13 @@ def test_extreme_budget_also_truncates_stage_a_and_b_mid_stage(fixture_text, mon
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     assert result.budget_truncated is True
     # H6: A and B are cut short mid-stage too now, not just C/confirm -- confirm is still last.
@@ -301,7 +395,13 @@ def test_generous_budget_never_truncates(fixture_text, monkeypatch):
     search_plan = planner.plan(chip, ctx.budget)
     runner = RecordingRunner()
 
-    result = engine.run(search_plan, ctx, run_bench=runner, cooldown_fn=_fake_cooldown)
+    result = engine.run(
+        search_plan,
+        ctx,
+        run_bench=runner,
+        cooldown_fn=_fake_cooldown,
+        collect_load=_fake_collect_load,
+    )
 
     assert result.budget_truncated is False
     assert result.dropped_stages == []

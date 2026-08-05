@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -118,6 +119,21 @@ def test_load_sweep_result_round_trips(tmp_path, sample_sweep_result):
     artifacts.dump(sample_sweep_result, path)
     rehydrated = artifacts.load_sweep_result(path)
     assert rehydrated == sample_sweep_result
+
+
+def test_load_sweep_result_hydrates_a_pre_load_telemetry_artifact():
+    """Feature F-A backward-compat: a real, committed result.json written before
+    `is_synthetic_config`/`baseline_threads`/`load_before`/`load_after` existed must still
+    hydrate cleanly, defaulting the additive fields rather than raising."""
+    path = (
+        Path(__file__).parent.parent / "docs" / "results" / "m1-max-loaded-20260720" / "result.json"
+    )
+    result = artifacts.load_sweep_result(path)
+
+    assert result.load_before is None
+    assert result.load_after is None
+    assert result.baseline.is_synthetic_config is False
+    assert result.best.is_synthetic_config is False
 
 
 def test_write_run_log_one_json_line_per_trial(tmp_path, sample_sweep_result):
