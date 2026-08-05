@@ -78,7 +78,7 @@ def test_top_level_help_exits_zero():
     assert "neonpilot" in result.stdout.lower()
 
 
-@pytest.mark.parametrize("command", ["probe", "optimize", "report", "apply"])
+@pytest.mark.parametrize("command", ["probe", "optimize", "report", "apply", "compare"])
 def test_subcommand_help_exits_zero(command):
     result = runner.invoke(app, [command, "--help"])
     assert result.exit_code == 0
@@ -997,3 +997,91 @@ def test_apply_typo_path_gives_clear_error_not_run_directory_message(tmp_path):
     assert "path not found" in flat_output
     assert "expected a preset" in flat_output
     assert "run directory not found" not in flat_output
+
+
+# --- F-B: `neonpilot compare` --------------------------------------------------------------
+
+
+def test_compare_writes_markdown_and_html_into_run_dir_a_by_default(
+    tmp_path, sample_chip_report, sample_sweep_result, sample_chip_report_m5, sample_sweep_result_m5
+):
+    run_dir_a = tmp_path / "run-a"
+    run_dir_a.mkdir()
+    artifacts.dump(sample_chip_report, run_dir_a / "chip.json")
+    artifacts.dump(sample_sweep_result, run_dir_a / "result.json")
+
+    run_dir_b = tmp_path / "run-b"
+    run_dir_b.mkdir()
+    artifacts.dump(sample_chip_report_m5, run_dir_b / "chip.json")
+    artifacts.dump(sample_sweep_result_m5, run_dir_b / "result.json")
+
+    result = runner.invoke(app, ["compare", str(run_dir_a), str(run_dir_b)])
+
+    assert result.exit_code == 0, result.stdout
+    assert (run_dir_a / "compare.md").exists()
+    assert (run_dir_a / "compare.html").exists()
+    assert not (run_dir_b / "compare.md").exists()  # default target is run_dir_a, not b
+    md_text = (run_dir_a / "compare.md").read_text(encoding="utf-8")
+    assert "Apple M1 Max" in md_text
+    assert "Apple M5" in md_text
+
+
+def test_compare_writes_into_out_dir_when_given(
+    tmp_path, sample_chip_report, sample_sweep_result, sample_chip_report_m5, sample_sweep_result_m5
+):
+    run_dir_a = tmp_path / "run-a"
+    run_dir_a.mkdir()
+    artifacts.dump(sample_chip_report, run_dir_a / "chip.json")
+    artifacts.dump(sample_sweep_result, run_dir_a / "result.json")
+
+    run_dir_b = tmp_path / "run-b"
+    run_dir_b.mkdir()
+    artifacts.dump(sample_chip_report_m5, run_dir_b / "chip.json")
+    artifacts.dump(sample_sweep_result_m5, run_dir_b / "result.json")
+
+    out_dir = tmp_path / "custom-out"
+
+    result = runner.invoke(app, ["compare", str(run_dir_a), str(run_dir_b), "--out", str(out_dir)])
+
+    assert result.exit_code == 0, result.stdout
+    assert (out_dir / "compare.md").exists()
+    assert (out_dir / "compare.html").exists()
+    assert not (run_dir_a / "compare.md").exists()
+
+
+def test_compare_missing_run_dir_a_artifacts_exits_cleanly(
+    tmp_path, sample_chip_report_m5, sample_sweep_result_m5
+):
+    """F-B: respects H4-style error handling on artifact loads from day one."""
+    run_dir_a = tmp_path / "run-a"  # never populated
+    run_dir_b = tmp_path / "run-b"
+    run_dir_b.mkdir()
+    artifacts.dump(sample_chip_report_m5, run_dir_b / "chip.json")
+    artifacts.dump(sample_sweep_result_m5, run_dir_b / "result.json")
+
+    result = runner.invoke(app, ["compare", str(run_dir_a), str(run_dir_b)])
+
+    assert result.exit_code != 0
+    flat_output = result.output.replace("\n", "").lower()
+    assert "traceback" not in flat_output
+    assert "missing chip.json/result.json" in flat_output
+
+
+def test_compare_truncated_result_json_in_run_dir_b_exits_cleanly(
+    tmp_path, sample_chip_report, sample_sweep_result, sample_chip_report_m5
+):
+    run_dir_a = tmp_path / "run-a"
+    run_dir_a.mkdir()
+    artifacts.dump(sample_chip_report, run_dir_a / "chip.json")
+    artifacts.dump(sample_sweep_result, run_dir_a / "result.json")
+
+    run_dir_b = tmp_path / "run-b"
+    run_dir_b.mkdir()
+    artifacts.dump(sample_chip_report_m5, run_dir_b / "chip.json")
+    (run_dir_b / "result.json").write_text("{truncated", encoding="utf-8")
+
+    result = runner.invoke(app, ["compare", str(run_dir_a), str(run_dir_b)])
+
+    assert result.exit_code != 0
+    assert "traceback" not in result.output.lower()
+    assert "failed to load run artifacts" in result.output.lower()

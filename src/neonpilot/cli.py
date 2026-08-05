@@ -38,6 +38,7 @@ from neonpilot.preset.io import UnsafePresetPathError
 from neonpilot.preset.schema import MAX_REPS, PresetValidationError
 from neonpilot.preset.schema import validate as validate_preset
 from neonpilot.probe import probe_host
+from neonpilot.report.compare import render_compare_html, render_compare_markdown
 from neonpilot.report.html import render_html
 from neonpilot.report.markdown import render_markdown
 from neonpilot.search import engine, planner
@@ -668,6 +669,60 @@ def _print_preset_summary(preset: Preset) -> None:
     console.print(f"schema_version: {preset.schema_version} (OK)", markup=False)
     console.print(preset_io.invocation(preset), markup=False)
     console.print(f"server_flags: {preset.server_flags}", markup=False)
+
+
+@app.command()
+def compare(
+    ctx: typer.Context,
+    run_dir_a: Annotated[Path, typer.Argument(help="First run directory to compare.")],
+    run_dir_b: Annotated[Path, typer.Argument(help="Second run directory to compare.")],
+    out: Annotated[
+        Path | None,
+        typer.Option(
+            "--out", help="Directory to write compare.md/compare.html into (default: run_dir_a)."
+        ),
+    ] = None,
+) -> None:
+    """Render a side-by-side Markdown + HTML comparison of two completed optimize runs."""
+    try:
+        _compare_impl(run_dir_a, run_dir_b, out)
+    except typer.Exit:
+        raise
+    except (OSError, RuntimeError, NotImplementedError) as exc:
+        _handle_top_level_error(ctx, exc)
+
+
+def _compare_impl(run_dir_a: Path, run_dir_b: Path, out: Path | None) -> None:
+    # Feature F-B: respect H4-style error handling on both artifact loads from day one, by
+    # reusing the exact same helper `report`/`apply --run-dir` already use.
+    chip_a, result_a = _load_run_artifacts(run_dir_a)
+    chip_b, result_b = _load_run_artifacts(run_dir_b)
+
+    out_dir = out if out is not None else run_dir_a
+    md_path = out_dir / "compare.md"
+    html_path = out_dir / "compare.html"
+    label_a, label_b = chip_a.chip_name, chip_b.chip_name
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(
+            render_compare_markdown(
+                result_a, chip_a, result_b, chip_b, label_a=label_a, label_b=label_b
+            ),
+            encoding="utf-8",
+        )
+        html_path.write_text(
+            render_compare_html(
+                result_a, chip_a, result_b, chip_b, label_a=label_a, label_b=label_b
+            ),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        error_console.print(
+            f"[red]failed to write compare report to {out_dir}: {rich_escape(str(exc))}[/red]"
+        )
+        raise typer.Exit(code=1) from exc
+    console.print(f"wrote {md_path}")
+    console.print(f"wrote {html_path}")
 
 
 if __name__ == "__main__":
