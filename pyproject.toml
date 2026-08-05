@@ -33,7 +33,7 @@ dev = [
 neonpilot = "neonpilot.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/neonpilot/neonpilot"
+Homepage = "https://github.com/SebAustin/neonpilot"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/neonpilot"]

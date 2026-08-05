@@ -231,7 +231,7 @@ final summary for verbatim output.
 ## 7. Reporting a vulnerability
 
 Please report security issues privately via GitHub Security Advisories:
-**https://github.com/neonpilot/neonpilot/security/advisories/new** (replace with the canonical repo
+**https://github.com/SebAustin/neonpilot/security/advisories/new** (replace with the canonical repo
 URL on publish). Do not open a public issue for undisclosed vulnerabilities. Include repro steps,
 affected version/commit, and impact. As a local, network-less CLI with no secrets, most issues are
 non-emergency; expect acknowledgement within a reasonable window for an open-source project.

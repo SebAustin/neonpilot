@@ -129,7 +129,7 @@ contents: read`, locked installs, model checksum, per-job timeouts. `uv lock --c
 1. **Quiet-machine `make benchmark` on the M1 Max** → fills the SC2 idle-machine reference and packages the first committed preset.
 2. **Same on the Apple M5** → completes the SME2 cross-generation story (SC3, SC6 M5 half) and the second preset.
 3. **Create the public GitHub repo** (Apache-2.0 visible) and push — gated on the user.
-4. **Update repo-URL placeholders** once the real repo exists — currently `github.com/neonpilot/neonpilot` in `pyproject.toml:36`, `README.md:5` (CI badge), `SECURITY.md:234`.
+4. **Update repo-URL placeholders** once the real repo exists — currently `github.com/SebAustin/neonpilot` in `pyproject.toml:36`, `README.md:5` (CI badge), `SECURITY.md:234`.
 5. **Devpost submission** using `DEVPOST.md` (in draft); optional <3-min demo video per `launch/DEMO-SCRIPT.md`.
 
 ---
