@@ -21,6 +21,7 @@ from rich.markup import escape as rich_escape
 
 from neonpilot import __version__, artifacts
 from neonpilot._llama_pin import LLAMA_CPP_COMMIT
+from neonpilot.bench import sysload
 from neonpilot.bench.stats import dominates
 from neonpilot.models import (
     SCHEMA_VERSION,
@@ -260,6 +261,14 @@ def optimize(
             "(raise this for large models).",
         ),
     ] = _DEFAULT_TIMEOUT_S,
+    strict_idle: Annotated[
+        bool,
+        typer.Option(
+            "--strict-idle",
+            help="Abort instead of warning when the host looks busy before the sweep starts "
+            "(feature F-A; see docs/dev/build-notes.md item 15 on noise-dominated speedups).",
+        ),
+    ] = False,
 ) -> None:
     """Run a staged, thermally guarded benchmark sweep to find the fastest runtime flags."""
     try:
@@ -274,6 +283,7 @@ def optimize(
             cooldown_s=cooldown_s,
             target_temp_c=target_temp_c,
             timeout_s=timeout_s,
+            strict_idle=strict_idle,
         )
     except typer.Exit:
         raise
@@ -320,6 +330,39 @@ def _print_sweep_failure(result: SweepResult, run_dir: Path) -> None:
     error_console.print(f"[red]see {run_dir / 'run.log'} for full trial-by-trial detail.[/red]")
 
 
+#: Feature F-A: above this loadavg_1m/physical-cores ratio, the host looks busy enough that a
+#: measurement is likely to be noise-dominated (docs/dev/build-notes.md item 15's root-cause
+#: writeup: background contention on a shared machine produced a 300-400% "speedup" that was
+#: pure sampling noise). 0.5 is a permissive threshold -- a fully idle box is near 0.0, a box
+#: with one CPU-bound background process per 2 cores is already at 0.5.
+_IDLE_LOAD_RATIO_WARN_THRESHOLD = 0.5
+
+
+def _check_ambient_load(chip: ChipReport, *, strict_idle: bool) -> None:
+    """Feature F-A preflight: warn (or, with `--strict-idle`, abort) when the host looks busy
+    before a sweep starts. Uses `sysload.read_loadavg()` directly (not the full
+    `collect_load_snapshot()`, which also shells out to `ps` for the top-process list) since
+    only the ratio is needed here; `engine.run()` separately records the full snapshot as
+    `SweepResult.load_before`.
+    """
+    loadavg_1m, _loadavg_5m, _loadavg_15m = sysload.read_loadavg()
+    if chip.total_cores <= 0:
+        return
+    load_ratio = loadavg_1m / chip.total_cores
+    if load_ratio <= _IDLE_LOAD_RATIO_WARN_THRESHOLD:
+        return
+
+    message = (
+        f"host load average ({loadavg_1m:.2f}) is {load_ratio:.1f}x the physical core count "
+        f"({chip.total_cores}) -- measurements may be noise-dominated "
+        "(see docs/dev/build-notes.md item 15)."
+    )
+    if strict_idle:
+        error_console.print(f"[red]--strict-idle: refusing to start -- {message}[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[yellow]warning: {message}[/yellow]")
+
+
 def _optimize_impl(
     *,
     model: Path,
@@ -332,6 +375,7 @@ def _optimize_impl(
     cooldown_s: float | None,
     target_temp_c: float | None,
     timeout_s: int,
+    strict_idle: bool,
 ) -> None:
     _validate_model_arg(model)
     model_class = _resolve_model_class(model)
@@ -344,6 +388,7 @@ def _optimize_impl(
         raise typer.Exit(code=1)
 
     chip = probe_host()
+    _check_ambient_load(chip, strict_idle=strict_idle)
     sweep_budget = SweepBudget(total_seconds=budget, reps=reps, prompt_n=prompt_n, gen_n=gen_n)
     search_plan = planner.plan(chip, sweep_budget)
     run_dir = artifacts.new_run_dir(out)

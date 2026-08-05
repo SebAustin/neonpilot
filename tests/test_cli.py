@@ -751,6 +751,108 @@ def test_optimize_accepts_custom_timeout_s(
     assert captured["timeout_s"] == 7
 
 
+# --- F-A: ambient-load preflight check + --strict-idle ---------------------------------------
+
+
+def test_optimize_warns_when_host_looks_busy(tmp_path, fake_llama_bin, monkeypatch):
+    from neonpilot import cli as cli_module
+
+    monkeypatch.setattr(cli_module.sysload, "read_loadavg", lambda: (999.0, 1.0, 1.0))
+
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF" + b"fake")
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(tmp_path / "runs"),
+            "--reps",
+            "1",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "measurements may be noise-dominated" in result.output.lower()
+
+
+def test_optimize_strict_idle_aborts_when_host_looks_busy(tmp_path, fake_llama_bin, monkeypatch):
+    from neonpilot import cli as cli_module
+
+    monkeypatch.setattr(cli_module.sysload, "read_loadavg", lambda: (999.0, 1.0, 1.0))
+
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF" + b"fake")
+    out_dir = tmp_path / "runs"
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(out_dir),
+            "--strict-idle",
+            "--reps",
+            "1",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "refusing to start" in result.output.lower()
+    assert not out_dir.exists()  # aborted before any run directory was created
+
+
+def test_optimize_no_busy_warning_when_host_is_idle(tmp_path, fake_llama_bin, monkeypatch):
+    from neonpilot import cli as cli_module
+
+    monkeypatch.setattr(cli_module.sysload, "read_loadavg", lambda: (0.1, 0.1, 0.1))
+
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF" + b"fake")
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(tmp_path / "runs"),
+            "--reps",
+            "1",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "noise-dominated" not in result.output.lower()
+
+
 # --- M5: --target-temp-c wiring ---------------------------------------------------------------
 
 
