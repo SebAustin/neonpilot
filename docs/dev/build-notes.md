@@ -193,3 +193,110 @@ milestone M5 (ASSUMPTIONS.md #6); it is never presented as measured hardware dat
       otherwise-idle machine** -- the 135M CI model at `--reps 2` is a stress-test of the
       credibility guard, not evidence of a code defect, and is not the model SC2 is measured
       against.
+
+# Robustness-review pass 1 (Phase 1: fixes) — external review, reproduced with stub binaries
+
+16. **Fixed all CRITICAL/HIGH/MEDIUM findings from an independent robustness review of
+    `src/neonpilot/`, plus two LOW findings.** Each item below is a separate, small commit;
+    every fix ships with a regression test that mirrors the reviewer's stub-binary/synthetic-
+    artifact reproduction setup. Two changes extend PLAN.md section 1.3's dataclass contract
+    (documented here per that section's own instruction to log deviations):
+
+    - **`TrialResult.is_synthetic_config: bool = False`** -- True only for the baseline/
+      confirm-baseline trial's `.config`, which is a *reconstruction* of what llama.cpp is
+      expected to resolve to (no `-t/-ctk/-ctv/-fa` flags are passed for that call, so nothing
+      in `BenchSample` actually carries the resolved values) -- never a measured, appliable
+      config. Additive with a default, so it hydrates cleanly from every pre-existing
+      `result.json` via `_hydrate.from_dict`'s now-lenient-default behavior (see below).
+    - **`SweepContext.baseline_threads: int = 8`** -- the thread count llama.cpp is expected to
+      resolve to (the chip's own P-core count) when no `-t` flag is given; used only to build
+      the baseline trial's *display* config, never its argv. `cli.py` now passes the real
+      probed `chip.p_cores` instead of the previously-hardcoded `8`.
+
+    Fix summary (C1/H1-H6/M1-M6, one bullet per reviewer finding ID):
+
+    - **C1 (critical):** a sweep where every trial errors previously exited 0 and printed a
+      bogus `best: confirm-baseline gen_ts=n/a` success line; `apply` would then happily
+      package the never-measured synthetic baseline config as a "winning" preset. `optimize`
+      now checks `result.best.status != "ok" or result.best.generation is None` after writing
+      artifacts (for post-mortem debugging) and exits 1 with every distinct trial error printed
+      first; `apply`'s preset-packaging path (`_build_preset_from_run`) independently refuses
+      the same condition, plus (H3) refuses whenever `best.is_synthetic_config` is True.
+    - **H1:** `bench/runner.run_bench` only caught `FileNotFoundError`; widened to `OSError` so
+      `PermissionError` (binary exists, missing +x) and "Exec format error" (wrong-arch binary)
+      produce a clean `BenchRunError` instead of a raw traceback.
+    - **H2:** `artifacts.new_run_dir` no longer touches the `latest` symlink at all; a new
+      `artifacts.mark_latest(run_dir)` is called from `cli.py` only *after* `result.json` is
+      written and only when the sweep produced a usable `best` (i.e. C1's check passed) --
+      repointing `latest` atomically via a temp-named symlink + `os.replace`, warning (not
+      silently passing) on `OSError`.
+    - **H3:** see the two new dataclass fields above; both report emitters
+      (`report/markdown.py`, `report/html.py`, via a new shared `report/_shared.py` helper)
+      render "defaults (as resolved by llama-bench; tuning did not beat the baseline)" instead
+      of a fabricated `threads=.../cache_type=...` line whenever `best.is_synthetic_config`.
+    - **H4:** `report`/`apply --run-dir`'s artifact loading is now centralized in
+      `cli._load_run_artifacts`, which translates `JSONDecodeError`/`TypeError`/`OSError` into
+      a friendly stderr message + `Exit(1)`, mirroring the pre-existing preset-load handler.
+      `report`'s `report.md`/`report.html` writes are similarly guarded against `OSError`.
+    - **H5:** `--budget`/`--reps`/`--cooldown-s` gained `typer.Option(min=..., max=...)` bounds
+      (`--reps`'s upper bound reuses `preset.schema.MAX_REPS`, renamed from `_MAX_REPS` to be
+      importable, so the CLI and the preset schema it eventually feeds can't drift apart).
+    - **H6:** `search/_stage_runner.run_stage` gained an optional `budget_tracker` parameter
+      (a `typing.Protocol`, to avoid a circular import with `search/engine.py`); when given, it
+      stops *starting* new Stage A/B/C candidates once the tracker projects the remainder won't
+      fit the budget (an in-flight trial always finishes; only the next one is skipped) and
+      returns a new `budget_exceeded` flag. `cli.py` prints a warning whenever
+      `result.elapsed_s > budget` and gained a `--timeout-s` option (default 120, previously a
+      hardcoded constant) for large models needing a longer per-invocation timeout.
+    - **M1:** `bench/parser.py` now rejects non-finite (`NaN`/`Infinity`/`-Infinity`, which
+      `json.loads` accepts by default despite RFC 8259 disallowing them) or negative
+      `avg_ts`/`stddev_ts`/`samples_ts` values with a `BenchParseError`, instead of letting them
+      propagate into a non-RFC-8259 `result.json` and an SVG `<rect width="nan">`.
+    - **M2:** `cli.optimize` installs a SIGTERM handler (for the duration of `engine.run` only)
+      that raises `KeyboardInterrupt`. CPython's own `subprocess.run` already kills its child
+      and re-raises on `KeyboardInterrupt` during `communicate()` -- that machinery only ever
+      fired on SIGINT before this fix, since Python's default SIGTERM disposition is silent
+      termination with no exception at all, orphaning the `llama-bench` child. No change needed
+      in `bench/runner.py`.
+    - **M3:** every CLI command now wraps its implementation in
+      `try/except typer.Exit: raise / except (OSError, RuntimeError, NotImplementedError):
+      cli._handle_top_level_error(...)`, printing a one-line stderr message + `Exit(1)` instead
+      of a raw traceback; a new `--debug` flag (set via `ctx.obj` in the app's `@app.callback`)
+      opts back into the full exception for troubleshooting. Note: `typer.Exit`/click's `Exit`
+      is (surprisingly) a `RuntimeError` subclass, so the `except typer.Exit: raise` guard
+      must come first, or every intentional `Exit` raised deeper in the call stack gets
+      re-wrapped as if it were a genuine error -- caught by this work's own new regression
+      tests before it shipped.
+    - **M4:** `optimize` now requires `model.is_file()` (not just `.exists()`, which accepted a
+      directory or a 0-byte file) and sniffs the first 4 bytes for the `GGUF` magic, both
+      before a sweep starts; `model_class` (derived from the filename) is validated with
+      `preset.io.sanitize_slug` (renamed from `_sanitize_slug` to be reusable across modules)
+      before the sweep starts too, instead of only failing at `apply` time after the sweep
+      already ran.
+    - **M5:** added a `--target-temp-c` option (default `None`, preserving the previous
+      fallback behavior) wired into `CooldownPolicy.target_temp_c`, making the already-
+      implemented and already-tested adaptive-cooldown branch in `bench/thermal.py` reachable
+      from the CLI for the first time.
+    - **M6:** `_hydrate.from_dict`'s dict-typed-field branch (e.g. `ChipReport.isa`) now
+      validates the value is actually a dict and recursively validates every key/value against
+      the declared types, instead of skipping validation entirely (previously
+      `"isa": "not-a-dict"` was accepted and only failed later, deep inside a report renderer,
+      with an obscure `AttributeError`). Independently, `from_dict` now falls back to a
+      dataclass field's own declared `default`/`default_factory` when a key is missing from the
+      source dict, instead of always raising -- this is the mechanism that lets
+      `is_synthetic_config`/`baseline_threads` (and Phase 2's additive fields) hydrate cleanly
+      from an artifact that predates them. Both branches had **zero** test coverage before this
+      pass despite backing every backward-compatibility guarantee in the codebase; both are
+      directly covered now.
+    - **LOW (apply typo'd-path misreport):** `apply <typo'd-path>` previously fell through to
+      `_resolve_run_dir`'s "run directory not found" message, which is misleading when the
+      user's intent was clearly a preset file (not a directory). `_apply_impl` now
+      distinguishes "not a file and not a directory" (typo -> new, clearer message) from "is an
+      existing directory" (the pre-existing, undocumented dual-mode fallback to run-dir
+      resolution, left unchanged).
+    - **LOW (unbounded `capture_output`):** documented (not fixed) in `bench/runner.py`:
+      `subprocess.run(capture_output=True, ...)` has no cap on stdout/stderr size, so a
+      misbehaving `llama-bench` build flooding stdout could grow memory unbounded before
+      `timeout_s` fires. Accepted for the same reason as the existing rlimit note in that file
+      (local, single-user, no privilege boundary) rather than replacing it with a custom
+      bounded-read `Popen` loop.
