@@ -4,19 +4,53 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from neonpilot import artifacts
 from neonpilot.probe.macos_sysctl import read_chip_report
 
 
-def test_new_run_dir_creates_directory_and_latest_symlink(tmp_path):
+def test_new_run_dir_creates_directory_without_touching_latest(tmp_path):
+    """H2: `new_run_dir` must NOT repoint `latest` -- that only happens once the caller has
+    finished writing the run's artifacts, via a separate `mark_latest()` call."""
     run_dir = artifacts.new_run_dir(tmp_path)
     assert run_dir.exists()
     assert run_dir.is_dir()
     assert run_dir.parent == tmp_path
+    assert not (tmp_path / "latest").exists()
+
+
+def test_mark_latest_creates_symlink_to_run_dir(tmp_path):
+    run_dir = artifacts.new_run_dir(tmp_path)
+    artifacts.mark_latest(run_dir)
 
     latest = tmp_path / "latest"
     assert latest.is_symlink()
     assert latest.resolve() == run_dir.resolve()
+
+
+def test_mark_latest_repoints_atomically_from_a_prior_run(tmp_path):
+    first = artifacts.new_run_dir(tmp_path)
+    artifacts.mark_latest(first)
+    second = artifacts.new_run_dir(tmp_path)
+    artifacts.mark_latest(second)
+
+    latest = tmp_path / "latest"
+    assert latest.resolve() == second.resolve()
+    # no leftover temp-named symlink from the atomic-replace dance
+    assert not any(p.name.startswith(".latest.tmp.") for p in tmp_path.iterdir())
+
+
+def test_mark_latest_warns_instead_of_silently_swallowing_oserror(tmp_path, monkeypatch):
+    """H2: a symlink failure must be visible (RuntimeWarning), not a bare `except: pass`."""
+    run_dir = artifacts.new_run_dir(tmp_path)
+
+    def fake_symlink_to(self, *args, **kwargs):
+        raise OSError("simulated symlink failure")
+
+    monkeypatch.setattr("pathlib.Path.symlink_to", fake_symlink_to)
+    with pytest.warns(RuntimeWarning, match="failed to update 'latest'"):
+        artifacts.mark_latest(run_dir)
 
 
 def test_new_run_dir_avoids_collisions_within_the_same_second(tmp_path, monkeypatch):

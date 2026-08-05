@@ -6,8 +6,11 @@ Run artifacts live at `~/.neonpilot/runs/<ISO-timestamp>/` by default (with a be
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
+import os
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,7 +22,10 @@ _TIMESTAMP_FORMAT = "%Y%m%dT%H%M%SZ"
 
 
 def new_run_dir(root: Path | None = None) -> Path:
-    """Create a fresh, empty run directory and best-effort update the `latest` symlink.
+    """Create a fresh, empty run directory. Does **not** touch the `latest` symlink -- call
+    `mark_latest()` once the run's artifacts are actually written (robustness review H2:
+    repointing `latest` at run *start* means a Ctrl-C mid-sweep leaves `latest` pointing at an
+    empty/partial directory, destroying the pointer to the last genuinely good run).
 
     :param root: parent directory for runs (default: `~/.neonpilot/runs`). CI passes
         `--out ./runs` so run artifacts land inside the workspace (PLAN.md section 2.1).
@@ -34,20 +40,37 @@ def new_run_dir(root: Path | None = None) -> Path:
         run_dir = base / f"{timestamp}-{suffix}"
         suffix += 1
     run_dir.mkdir(parents=True)
-
-    _update_latest_symlink(base, run_dir)
     return run_dir
 
 
-def _update_latest_symlink(base: Path, run_dir: Path) -> None:
-    """Best-effort `latest` symlink; never fails the run if the platform lacks symlinks."""
+def mark_latest(run_dir: Path) -> None:
+    """Atomically repoint `<run_dir.parent>/latest` at `run_dir`.
+
+    Call this only after `run_dir`'s artifacts are fully written (robustness review H2). Uses
+    a temp-named symlink + `os.replace` (atomic rename on POSIX) rather than unlink-then-
+    symlink, so a crash between the two steps can never leave `latest` missing entirely --
+    either the old target or the new one is always resolvable.
+
+    Best-effort but **not silent**: a platform without symlink support (or a permissions
+    issue) now emits a `RuntimeWarning` instead of being swallowed, since a stale/missing
+    `latest` pointer is a real footgun for `report`/`apply --run-dir`'s default resolution.
+    """
+    base = run_dir.parent
     latest = base / "latest"
+    tmp_link = base / f".latest.tmp.{os.getpid()}"
     try:
-        if latest.is_symlink() or latest.exists():
-            latest.unlink()
-        latest.symlink_to(run_dir.name)
-    except OSError:
-        pass  # e.g. no symlink support -- artifacts are still written to run_dir itself.
+        with contextlib.suppress(FileNotFoundError):
+            tmp_link.unlink()
+        tmp_link.symlink_to(run_dir.name)
+        os.replace(tmp_link, latest)
+    except OSError as exc:
+        warnings.warn(
+            f"neonpilot: failed to update 'latest' symlink at {latest}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        with contextlib.suppress(OSError):
+            tmp_link.unlink()
 
 
 def _jsonable(obj: object) -> object:
