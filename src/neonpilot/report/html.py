@@ -7,10 +7,11 @@ access and no console errors.
 
 from __future__ import annotations
 
-import html
-
 from neonpilot.bench.stats import dominates
 from neonpilot.models import ChipReport, SweepResult, TrialResult
+from neonpilot.report._shared import CSS as _CSS
+from neonpilot.report._shared import comparison_chart as _comparison_chart
+from neonpilot.report._shared import esc as _esc
 from neonpilot.report._shared import measurement_conditions_text, winning_config_text
 
 #: Baseline-credibility guard (docs/dev/build-notes.md item 15) -- see report/markdown.py's
@@ -21,77 +22,6 @@ _LOW_CONFIDENCE_NOTE = (
     "PLAN.md section 4.3). Treat the headline percentage as noisy, not proven; consider "
     "re-running with more repetitions (--reps) or on a quieter machine before trusting it."
 )
-
-_CHART_WIDTH = 440
-_BAR_HEIGHT = 26
-_BAR_GAP = 10
-_LABEL_OFFSET = 8
-
-
-def _esc(value: object) -> str:
-    """`html.escape(str(value))` for *every* interpolated value, numeric/bool included
-    (SECURITY.md F9). `_hydrate.py`'s strict scalar typing (F1) already guarantees these are
-    real `int`/`bool` by the time they reach this renderer, but escaping unconditionally is
-    cheap and removes any future dependence on that guarantee holding for HTML safety."""
-    return html.escape(str(value))
-
-
-_CSS = """
-:root {
-  --bg: #0b0d12; --fg: #e8e8ec; --accent: #4fd1c5; --accent2: #f6ad55;
-  --muted: #9aa0ab; --border: #242832; --surface: #161a22;
-}
-* { box-sizing: border-box; }
-body {
-  background: var(--bg); color: var(--fg); margin: 0; padding: 2rem; line-height: 1.5;
-  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
-}
-h1, h2 { font-weight: 600; }
-table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; \
-font-size: 0.9rem; }
-th { background: var(--surface); }
-.bar-baseline { fill: var(--muted); }
-.bar-tuned { fill: var(--accent); }
-.chart-title { fill: var(--fg); font-size: 13px; }
-.bar-label { fill: var(--fg); font-size: 12px; }
-.caveat { color: var(--accent2); border-left: 3px solid var(--accent2); padding-left: 0.75rem; }
-section { margin-bottom: 2rem; }
-code { color: var(--accent); }
-"""
-
-
-def _bar(y: int, value: float, max_value: float, css_class: str, label: str) -> str:
-    plot_width = _CHART_WIDTH - 150
-    width = 0.0 if max_value <= 0 else (value / max_value) * plot_width
-    width = max(width, 1.0)
-    return (
-        f'<rect x="0" y="{y}" width="{width:.1f}" height="{_BAR_HEIGHT}" '
-        f'class="{css_class}"></rect>'
-        f'<text x="{width + _LABEL_OFFSET:.1f}" y="{y + _BAR_HEIGHT - 8}" class="bar-label">'
-        f"{_esc(label)}</text>"
-    )
-
-
-def _comparison_chart(title: str, baseline_value: float, tuned_value: float, unit: str) -> str:
-    max_value = max(baseline_value, tuned_value, 1e-9)
-    height = _BAR_HEIGHT * 2 + _BAR_GAP + 34
-    baseline_bar = _bar(
-        24, baseline_value, max_value, "bar-baseline", f"Baseline: {baseline_value:.2f} {unit}"
-    )
-    tuned_bar = _bar(
-        24 + _BAR_HEIGHT + _BAR_GAP,
-        tuned_value,
-        max_value,
-        "bar-tuned",
-        f"Tuned: {tuned_value:.2f} {unit}",
-    )
-    return (
-        f'<svg viewBox="0 0 {_CHART_WIDTH} {height}" role="img" '
-        f'aria-label="{_esc(title)} comparison chart">'
-        f'<text x="0" y="14" class="chart-title">{_esc(title)}</text>'
-        f"{baseline_bar}{tuned_bar}</svg>"
-    )
 
 
 def _trial_row(trial: TrialResult) -> str:
