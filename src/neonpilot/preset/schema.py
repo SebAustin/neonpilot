@@ -26,9 +26,12 @@ _VALID_CACHE_TYPES = frozenset(
 
 #: Sane upper bounds for positive-int config fields (SECURITY.md F1): generous enough for any
 #: real chip/workload, tight enough to reject nonsense (e.g. threads=2**31).
+#: `MAX_REPS` is public (not `_`-prefixed): robustness review H5 reuses it as the `--reps`
+#: upper bound in `cli.py`, so the CLI and the preset schema it eventually feeds can never
+#: drift apart on what a "valid" reps value is.
 _MAX_THREADS = 1024
 _MAX_BATCH = 1 << 20
-_MAX_REPS = 1000
+MAX_REPS = 1000
 
 
 class PresetValidationError(Exception):
@@ -63,8 +66,8 @@ def validate(data: object) -> Preset:
 
     _validate_runtime_config(preset.config)
     _validate_model_file(preset.model_file)
-    if preset.reps < 1 or preset.reps > _MAX_REPS:
-        raise PresetValidationError(f"reps must be between 1 and {_MAX_REPS}, got {preset.reps}")
+    if preset.reps < 1 or preset.reps > MAX_REPS:
+        raise PresetValidationError(f"reps must be between 1 and {MAX_REPS}, got {preset.reps}")
 
     return preset
 
