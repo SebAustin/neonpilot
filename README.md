@@ -73,7 +73,8 @@ sweeps are slow, unscientific, and don't explain *why* one config wins.
 
 ## How it works
 
-Four commands, one pipeline: `probe` → `optimize` → `report` → `apply`.
+Four commands, one pipeline: `probe` → `optimize` → `report` → `apply` — plus a fifth,
+`compare`, for putting two runs (e.g. two different chips) side by side.
 
 ### `neonpilot probe`
 
@@ -152,6 +153,20 @@ uv run neonpilot apply presets/apple-m1-max/qwen2.5-3b-instruct-q4_k_m.json
 `apply` never executes a loaded preset's flags directly — it validates against the versioned
 schema (`schema_version`, enum/range checks on every scalar field) and prints the invocation for
 you to review and run yourself.
+
+### Comparing two chips
+
+```bash
+uv run neonpilot compare <run-dir-a> <run-dir-b>              # writes into <run-dir-a>
+uv run neonpilot compare <run-dir-a> <run-dir-b> --out <dir>  # write elsewhere instead
+```
+
+Renders `compare.md` and a self-contained `compare.html` (same zero-external-asset discipline as
+`report`) side by side from two completed `optimize` runs: a chip ISA feature table with the
+differing rows highlighted (e.g. i8mm/SME2 present on one side only), each machine's own
+baseline-vs-tuned throughput charts, a winning-config field-by-field diff table, and each side's
+ambient-load conditions when recorded (see below). This is exactly how this repo's own
+[M1 Max ↔ M5](#apple-m5-sme2) comparison was produced.
 
 ### Where artifacts land
 
