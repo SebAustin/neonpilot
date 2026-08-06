@@ -1,0 +1,11 @@
+# Rendered/raw video is regenerable from the committed .tape files + assemble.sh.
+# Keep large binary media out of git; the pipeline is fully reproducible from source.
+segments/*.mp4
+segments/*.mov
+segments/*.gif
+assets/*.png
+assets/*.mp4
+tmp/
+neonpilot-demo.mp4
+*.mp4
+!.gitkeep
