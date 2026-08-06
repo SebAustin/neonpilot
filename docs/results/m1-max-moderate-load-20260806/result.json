@@ -1,0 +1,684 @@
+{
+  "baseline": {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 8,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-06T11:33:09.975172+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 13.242214,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        13.6365,
+        11.2266,
+        14.8635
+      ],
+      "stddev_ts": 1.850198,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": true,
+    "prefill": {
+      "avg_ts": 182.514629,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        182.761,
+        182.831,
+        181.953
+      ],
+      "stddev_ts": 0.48792,
+      "test_type": "pp"
+    },
+    "reps": 3,
+    "stage": "confirm",
+    "started_at": "2026-08-06T11:32:27.255958+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "confirm-baseline"
+  },
+  "best": {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 6,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-06T11:34:01.021484+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 24.046882,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        24.1695,
+        24.5633,
+        23.4078
+      ],
+      "stddev_ts": 0.587454,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 160.032832,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        160.319,
+        159.413,
+        160.367
+      ],
+      "stddev_ts": 0.537714,
+      "test_type": "pp"
+    },
+    "reps": 3,
+    "stage": "confirm",
+    "started_at": "2026-08-06T11:33:29.985450+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "confirm-best"
+  },
+  "budget": {
+    "gen_n": 128,
+    "prompt_n": 512,
+    "reps": 3,
+    "total_seconds": 900
+  },
+  "budget_truncated": false,
+  "dropped_stages": [],
+  "elapsed_s": 480.71624712459743,
+  "llama_cpp_commit": "178a6c44937154dc4c4eff0d166f4a044c4fceba",
+  "load_after": {
+    "loadavg_15m": 5.302734375,
+    "loadavg_1m": 8.40380859375,
+    "loadavg_5m": 6.82275390625,
+    "top_processes": [
+      {
+        "comm": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer",
+        "pcpu": 45.7
+      },
+      {
+        "comm": "/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine",
+        "pcpu": 35.8
+      },
+      {
+        "comm": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper",
+        "pcpu": 29.0
+      }
+    ]
+  },
+  "load_before": {
+    "loadavg_15m": 3.72509765625,
+    "loadavg_1m": 3.78125,
+    "loadavg_5m": 4.2255859375,
+    "top_processes": [
+      {
+        "comm": "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)",
+        "pcpu": 55.3
+      },
+      {
+        "comm": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer",
+        "pcpu": 46.3
+      },
+      {
+        "comm": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper",
+        "pcpu": 23.2
+      }
+    ]
+  },
+  "model_class": "qwen2.5-3b-instruct-q4_k_m",
+  "model_file": "qwen2.5-3b-instruct-q4_k_m.gguf",
+  "schema_version": "1.0.0",
+  "speedup_gen_pct": 81.59260981585102,
+  "speedup_prefill_pct": -12.31780549492282,
+  "trials": [
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:27:39.308327+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 26.807035,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          26.9572,
+          26.8349,
+          26.629
+        ],
+        "stddev_ts": 0.165866,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 159.43668,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          155.2,
+          159.932,
+          163.178
+        ],
+        "stddev_ts": 4.012057,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "A",
+      "started_at": "2026-08-06T11:27:09.900159+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "A1"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "threads": 8,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:28:39.772709+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 14.078214,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          12.8173,
+          15.2802,
+          14.1371
+        ],
+        "stddev_ts": 1.232494,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 193.115525,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          190.199,
+          195.314,
+          193.833
+        ],
+        "stddev_ts": 2.632325,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "A",
+      "started_at": "2026-08-06T11:27:59.313740+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "A2"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "threads": 9,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:28:39.772761+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "A",
+      "started_at": "2026-08-06T11:28:39.772761+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "A3"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "threads": 10,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:28:39.772765+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "A",
+      "started_at": "2026-08-06T11:28:39.772765+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "A4"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:29:31.479188+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 22.798062,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          21.564,
+          23.2215,
+          23.6087
+        ],
+        "stddev_ts": 1.086137,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 163.267535,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          163.876,
+          164.227,
+          161.699
+        ],
+        "stddev_ts": 1.369468,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "B",
+      "started_at": "2026-08-06T11:28:59.776499+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "B1"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "q8_0",
+        "cache_type_v": "q8_0",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:29:31.479247+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "B",
+      "started_at": "2026-08-06T11:29:31.479247+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "B2"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "q4_0",
+        "cache_type_v": "q4_0",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:29:31.479251+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "B",
+      "started_at": "2026-08-06T11:29:31.479251+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "B3"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "on",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:29:31.479253+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "B",
+      "started_at": "2026-08-06T11:29:31.479253+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "B4"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "q8_0",
+        "cache_type_v": "q8_0",
+        "flash_attn": "on",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:29:31.479256+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "B",
+      "started_at": "2026-08-06T11:29:31.479256+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "B5"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "q4_0",
+        "cache_type_v": "q4_0",
+        "flash_attn": "on",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:29:31.479258+00:00",
+      "error": null,
+      "generation": null,
+      "is_synthetic_config": false,
+      "prefill": null,
+      "reps": 0,
+      "stage": "B",
+      "started_at": "2026-08-06T11:29:31.479258+00:00",
+      "status": "pruned",
+      "thermal": null,
+      "trial_id": "B6"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:30:23.045963+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 22.798506,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          23.0974,
+          22.2342,
+          23.0639
+        ],
+        "stddev_ts": 0.489005,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 165.354351,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          163.688,
+          163.674,
+          168.701
+        ],
+        "stddev_ts": 2.898522,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "C",
+      "started_at": "2026-08-06T11:29:51.484682+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "C1"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 1024
+      },
+      "ended_at": "2026-08-06T11:31:15.814113+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 21.605505,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          20.1562,
+          22.2908,
+          22.3695
+        ],
+        "stddev_ts": 1.255785,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 162.034935,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          162.642,
+          162.361,
+          161.102
+        ],
+        "stddev_ts": 0.820547,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "C",
+      "started_at": "2026-08-06T11:30:43.047580+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "C2"
+    },
+    {
+      "config": {
+        "batch": 4096,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 2048
+      },
+      "ended_at": "2026-08-06T11:32:07.254782+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 23.174305,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          22.954,
+          22.889,
+          23.6799
+        ],
+        "stddev_ts": 0.439097,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 162.369986,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          162.96,
+          160.369,
+          163.78
+        ],
+        "stddev_ts": 1.780341,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "C",
+      "started_at": "2026-08-06T11:31:35.823298+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "C3"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "auto",
+        "threads": 8,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:33:09.975172+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 13.242214,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          13.6365,
+          11.2266,
+          14.8635
+        ],
+        "stddev_ts": 1.850198,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": true,
+      "prefill": {
+        "avg_ts": 182.514629,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          182.761,
+          182.831,
+          181.953
+        ],
+        "stddev_ts": 0.48792,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "confirm",
+      "started_at": "2026-08-06T11:32:27.255958+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "confirm-baseline"
+    },
+    {
+      "config": {
+        "batch": 2048,
+        "cache_type_k": "f16",
+        "cache_type_v": "f16",
+        "flash_attn": "off",
+        "threads": 6,
+        "ubatch": 512
+      },
+      "ended_at": "2026-08-06T11:34:01.021484+00:00",
+      "error": null,
+      "generation": {
+        "avg_ts": 24.046882,
+        "n_gen": 128,
+        "n_prompt": 0,
+        "samples_ts": [
+          24.1695,
+          24.5633,
+          23.4078
+        ],
+        "stddev_ts": 0.587454,
+        "test_type": "tg"
+      },
+      "is_synthetic_config": false,
+      "prefill": {
+        "avg_ts": 160.032832,
+        "n_gen": 0,
+        "n_prompt": 512,
+        "samples_ts": [
+          160.319,
+          159.413,
+          160.367
+        ],
+        "stddev_ts": 0.537714,
+        "test_type": "pp"
+      },
+      "reps": 3,
+      "stage": "confirm",
+      "started_at": "2026-08-06T11:33:29.985450+00:00",
+      "status": "ok",
+      "thermal": {
+        "cooldown_s": 20.0,
+        "cpu_temp_c": null,
+        "source": "elapsed-fallback",
+        "throttled": null
+      },
+      "trial_id": "confirm-best"
+    }
+  ]
+}

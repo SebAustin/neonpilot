@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neonpilot report: Apple M1 Max / qwen2.5-3b-instruct-q4_k_m</title>
+<style>
+:root {
+  --bg: #0b0d12; --fg: #e8e8ec; --accent: #4fd1c5; --accent2: #f6ad55;
+  --muted: #9aa0ab; --border: #242832; --surface: #161a22;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); margin: 0; padding: 2rem; line-height: 1.5;
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+h1, h2 { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
+th { background: var(--surface); }
+.bar-baseline { fill: var(--muted); }
+.bar-tuned { fill: var(--accent); }
+.chart-title { fill: var(--fg); font-size: 13px; }
+.bar-label { fill: var(--fg); font-size: 12px; }
+.caveat { color: var(--accent2); border-left: 3px solid var(--accent2); padding-left: 0.75rem; }
+.delta-highlight { background: rgba(246, 173, 85, 0.18); }
+section { margin-bottom: 2rem; }
+code { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>neonpilot report: Apple M1 Max / qwen2.5-3b-instruct-q4_k_m</h1>
+<p>Model file: <code>qwen2.5-3b-instruct-q4_k_m.gguf</code> | llama.cpp commit: <code>178a6c44937154dc4c4eff0d166f4a044c4fceba</code> | schema: <code>1.0.0</code></p>
+
+<section>
+<h2>Baseline vs. tuned</h2>
+<svg viewBox="0 0 440 96" role="img" aria-label="Generation throughput comparison chart"><text x="0" y="14" class="chart-title">Generation throughput</text><rect x="0" y="24" width="159.7" height="26" class="bar-baseline"></rect><text x="167.7" y="42" class="bar-label">Baseline: 13.24 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 24.05 t/s</text></svg>
+<svg viewBox="0 0 440 96" role="img" aria-label="Prefill throughput comparison chart"><text x="0" y="14" class="chart-title">Prefill throughput</text><rect x="0" y="24" width="290.0" height="26" class="bar-baseline"></rect><text x="298.0" y="42" class="bar-label">Baseline: 182.51 t/s</text><rect x="0" y="60" width="254.3" height="26" class="bar-tuned"></rect><text x="262.3" y="78" class="bar-label">Tuned: 160.03 t/s</text></svg>
+<p>Generation speedup: +81.6% | Prefill speedup: -12.3%</p>
+</section>
+<section>
+<h2>Chip ISA features</h2>
+<table><thead><tr><th>Feature</th><th>Present</th></tr></thead><tbody><tr><td>bf16</td><td>False</td></tr><tr><td>dotprod</td><td>True</td></tr><tr><td>fp16</td><td>True</td></tr><tr><td>i8mm</td><td>False</td></tr><tr><td>neon</td><td>True</td></tr><tr><td>sme</td><td>False</td></tr><tr><td>sme2</td><td>False</td></tr><tr><td>sve</td><td>False</td></tr><tr><td>sve2</td><td>False</td></tr></tbody></table>
+</section>
+<section>
+<h2>llama.cpp fast-path activation</h2>
+<table><thead><tr><th>Feature</th><th>Kernel</th><th>Active</th><th>Why</th></tr></thead><tbody><tr><td>neon</td><td>NEON generic dot-product kernel (CPU_REPACK, no KleidiAI micro-kernel)</td><td>False</td><td>NEON present but superseded by a higher KleidiAI tier (dotprod/i8mm/sme2).</td></tr><tr><td>dotprod</td><td>KleidiAI DOTPROD q4/q8 GEMM</td><td>True</td><td>i8mm ABSENT -&gt; DOTPROD-tier KleidiAI kernels engaged; SME disabled; other quant types via CPU_REPACK q6_K_8x4.</td></tr><tr><td>i8mm</td><td>KleidiAI I8MM q4/q8 GEMM</td><td>False</td><td>i8mm ABSENT -&gt; falls back to a lower KleidiAI tier (dotprod) or CPU_REPACK.</td></tr><tr><td>sme</td><td>SME (non-SME2) kernel</td><td>False</td><td>SME absent -&gt; no SME-family kernels available on this chip.</td></tr><tr><td>sme2</td><td>SME2 kernel (M5)</td><td>False</td><td>SME2 absent -&gt; SME-tier KleidiAI kernels do not engage on this chip.</td></tr></tbody></table>
+</section>
+<section>
+<h2>Methodology</h2>
+<ul>
+<li>Repetitions per config: 3 (prompt_n=512, gen_n=128)</li>
+<li>Wall-clock budget: 900s; actual elapsed: 480.7s</li>
+<li>Winning config: threads=6, cache_type=f16/f16, flash_attn=off, batch/ubatch=2048/512</li>
+<li>Measurement conditions: loadavg(1m/5m/15m)=3.78/4.23/3.73, top process: /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer) (55.3% CPU)</li>
+</ul>
+</section>
+<section>
+<h2>All trials</h2>
+<table><thead><tr><th>Trial</th><th>Stage</th><th>Status</th><th>Threads</th><th>KV</th><th>FA</th><th>Gen t/s</th><th>Prefill t/s</th></tr></thead><tbody><tr><td>A1</td><td>A</td><td>ok</td><td>6</td><td>f16</td><td>auto</td><td>26.81</td><td>159.44</td></tr><tr><td>A2</td><td>A</td><td>ok</td><td>8</td><td>f16</td><td>auto</td><td>14.08</td><td>193.12</td></tr><tr><td>A3</td><td>A</td><td>pruned</td><td>9</td><td>f16</td><td>auto</td><td>-</td><td>-</td></tr><tr><td>A4</td><td>A</td><td>pruned</td><td>10</td><td>f16</td><td>auto</td><td>-</td><td>-</td></tr><tr><td>B1</td><td>B</td><td>ok</td><td>6</td><td>f16</td><td>off</td><td>22.80</td><td>163.27</td></tr><tr><td>B2</td><td>B</td><td>pruned</td><td>6</td><td>q8_0</td><td>off</td><td>-</td><td>-</td></tr><tr><td>B3</td><td>B</td><td>pruned</td><td>6</td><td>q4_0</td><td>off</td><td>-</td><td>-</td></tr><tr><td>B4</td><td>B</td><td>pruned</td><td>6</td><td>f16</td><td>on</td><td>-</td><td>-</td></tr><tr><td>B5</td><td>B</td><td>pruned</td><td>6</td><td>q8_0</td><td>on</td><td>-</td><td>-</td></tr><tr><td>B6</td><td>B</td><td>pruned</td><td>6</td><td>q4_0</td><td>on</td><td>-</td><td>-</td></tr><tr><td>C1</td><td>C</td><td>ok</td><td>6</td><td>f16</td><td>off</td><td>22.80</td><td>165.35</td></tr><tr><td>C2</td><td>C</td><td>ok</td><td>6</td><td>f16</td><td>off</td><td>21.61</td><td>162.03</td></tr><tr><td>C3</td><td>C</td><td>ok</td><td>6</td><td>f16</td><td>off</td><td>23.17</td><td>162.37</td></tr><tr><td>confirm-baseline</td><td>confirm</td><td>ok</td><td>8</td><td>f16</td><td>auto</td><td>13.24</td><td>182.51</td></tr><tr><td>confirm-best</td><td>confirm</td><td>ok</td><td>6</td><td>f16</td><td>off</td><td>24.05</td><td>160.03</td></tr></tbody></table>
+</section>
+</body>
+</html>
