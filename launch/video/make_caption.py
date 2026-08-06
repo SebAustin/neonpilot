@@ -51,9 +51,7 @@ def render_caption(text: str, out_path: str, *, top: bool = False, accent: bool 
     box_y0 = MARGIN_TOP if top else CANVAS_H - MARGIN_BOTTOM - box_h
     box_y1 = box_y0 + box_h
 
-    draw.rounded_rectangle(
-        (box_x0, box_y0, box_x0 + box_w, box_y1), radius=14, fill=BOX_COLOR
-    )
+    draw.rounded_rectangle((box_x0, box_y0, box_x0 + box_w, box_y1), radius=14, fill=BOX_COLOR)
 
     color = ACCENT_COLOR if accent else TEXT_COLOR
     y = box_y0 + BOX_PAD_Y

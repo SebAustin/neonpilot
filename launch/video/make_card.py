@@ -23,7 +23,9 @@ SUB_FONT_PATH = "/System/Library/Fonts/Supplemental/Arial.ttf"
 MONO_FONT_PATH = "/System/Library/Fonts/Menlo.ttc"
 
 
-def _centered_text(draw: ImageDraw.ImageDraw, y: int, text: str, font: ImageFont.FreeTypeFont, fill):
+def _centered_text(
+    draw: ImageDraw.ImageDraw, y: int, text: str, font: ImageFont.FreeTypeFont, fill
+):
     bbox = draw.textbbox((0, 0), text, font=font)
     w = bbox[2] - bbox[0]
     x = (CANVAS_W - w) // 2
