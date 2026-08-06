@@ -9,11 +9,15 @@
 Submission for the **Arm AI Optimization Challenge 2026** (Devpost), **Mobile AI** track.
 
 > Status: milestones M0–M6 (scaffold, probe, bench harness, staged search, report + preset,
-> reproducible `make benchmark`) are implemented and tested. A real 900s sweep on the M1 Max
-> reference machine has been run end-to-end (see [Results](#results) below) — but under heavy
-> ambient system load, so it's documented honestly as an adaptive/loaded-machine case study, not
-> the idle-machine SC2 reference number. Re-running `make benchmark` on a quiet machine to
-> capture that clean reference, and the separate Apple M5 cross-generation run, remain open.
+> reproducible `make benchmark`) are implemented and tested. Two real 900s sweeps on the M1 Max
+> reference machine have been run end-to-end (see [Results](#results) below) — both under
+> real-world ambient system load (two different regimes, one heavier and steadier, one
+> moderate and non-constant), so both are documented honestly as adaptive/loaded-machine case
+> studies, not the idle-machine SC2 reference number. The second run's own load telemetry
+> (feature F-A) is what makes "how loaded was the machine" a recorded fact instead of a
+> description. Re-running `make benchmark` on a quiet machine (expected on the Apple M5
+> reference machine) to capture that clean idle reference, and the first committed preset,
+> remain open.
 
 ---
 
@@ -186,46 +190,61 @@ committed and diffed.
 ## Results
 
 <!-- RESULTS:M1MAX -->
-### Case study: loaded M1 Max (real-world conditions)
+### Case studies: tuning under real-world load (two runs, two load regimes)
 
-A real 900s `neonpilot optimize` sweep against the reference model (Qwen2.5-3B-Instruct
-Q4_K_M, ~2.1 GB) completed on the Apple M1 Max reference machine (64 GB RAM, macOS 26.5,
-`llama.cpp` pin `b10069`/`178a6c44`) while the machine was under **heavy ambient load**: Docker
-Desktop ~54% CPU, a VM ~19% CPU, Webex, and WindowServer all running concurrently
-(`loadavg` 7.6–12.2 on a 10-core machine). The run completed in full (`budget_truncated=False`,
-543.9s elapsed of the 900s budget, 3 reps, back-to-back confirm pass):
+Two real 900s `neonpilot optimize` sweeps against the reference model (Qwen2.5-3B-Instruct
+Q4_K_M, ~2.1 GB) completed end-to-end on the Apple M1 Max reference machine (64 GB RAM,
+`llama.cpp` pin `b10069`/`178a6c44`) — both while the machine was doing real, unstaged
+day-to-day work in the background, not on a quiet/idle box. That's deliberate: it's the
+scenario neonpilot's adaptive tuning is actually for, and each run's own `result.json` (and, for
+the second run, its **load telemetry**, feature F-A) is the receipts, not a hand-written claim.
 
-| Metric | Baseline (llama.cpp defaults, `threads=8`) | Tuned (`threads=6, fa=off, kv=f16, b=4096/2048`) | Speedup |
-|---|---|---|---|
-| Generation t/s (median ± stddev) | 9.05 ± 1.79 | 22.11 ± 1.04 | **+144.2%** |
-| Prefill t/s (median ± stddev) | 137.8 ± 56.6 | 168.0 ± 2.2 | **+21.9%** |
+| Run | Date | Load regime | Baseline gen t/s | Tuned gen t/s | Gen speedup | Prefill speedup | Winning config | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| #1 | Jul 20 | Heavy (Docker Desktop ~54%, a VM ~19%, Webex; `loadavg` 7.6–12.2) | 9.05 ± 1.79 | 22.11 ± 1.04 | **+144.2%** | +21.9% | `threads=6, fa=off, kv=f16, b=4096/2048` | [`docs/results/m1-max-loaded-20260720/`](./docs/results/m1-max-loaded-20260720/) |
+| #2 | Aug 6 | Moderate, non-constant (`loadavg_1m` 3.78→8.40 as a background VM returned mid-run — recorded by F-A, see below) | 13.24 ± 1.85 | 24.05 ± 0.59 | **+81.6%** | **−12.3%** (honestly reported, not hidden — see the run's own README) | `threads=6, fa=off, kv=f16, b=2048/512` | [`docs/results/m1-max-moderate-load-20260806/`](./docs/results/m1-max-moderate-load-20260806/) |
 
-**Why threads=6 beat the "obvious" threads=8 default here:** requesting all 8 P-cores gives
-`llama.cpp`'s per-layer thread barrier zero scheduling slack — every layer's compute has to wait
-for every thread to be re-scheduled, and under this machine's ambient load (Docker/VM/Webex
-competing for the same P-cores) that barrier stalls badly, which is exactly what the baseline's
-wild prefill variance (±56.6 t/s) and collapsed generation throughput show. Leaving two P-cores
-free (`threads=6`) gives the OS scheduler room to service the other processes without blocking
-llama.cpp's own barrier, and the tuner picked it up correctly from the measurements — this is the
-staged sweep adapting to the machine *as it actually was*, not a clean-room number. Full evidence
-(per-trial samples, methodology, chip probe) is in
-[`docs/results/m1-max-loaded-20260720/`](./docs/results/m1-max-loaded-20260720/), clearly labeled
-**"measured under ambient load; adaptive result, not an idle-machine reference."**
+**The consistent finding:** both runs, on two different days under two different ambient-load
+regimes, independently converge on `threads=6` (not the shipped `threads=8` default,
+this chip's own P-core count) as the generation-throughput winner. `llama.cpp`'s decode loop
+synchronizes all worker threads at a per-layer barrier; requesting all 8 P-cores leaves that
+barrier with zero scheduling slack, so any competing process forces a preemption that stalls
+every other worker thread. Leaving two P-cores unrequested gives the scheduler room to service
+that competing work without stalling llama.cpp's own barrier — the staged sweep adapting to the
+machine *as it actually was*, not a clean-room number, reproduced independently rather than a
+one-off.
 
-### Idle-machine reference (reproduce with one command)
+Run #2 also demonstrates the honest side of adaptive tuning: its tuned config kept the
+baseline's batch/ubatch sizing and only changed threads + flash-attn, which *cost* prefill
+throughput (−12.3%) even as it won decode by a wide margin — the tuner optimizes generation
+throughput as the primary objective (PLAN.md), and that tradeoff is reported plainly rather than
+buried behind a single headline percentage. Run #2's `result.json` also carries an automatic,
+tool-recorded snapshot of ambient load at sweep start and end (`SweepResult.load_before`/
+`load_after`, feature F-A) — no manual transcription — which is what makes "how loaded was the
+machine, and did that change mid-run" a verifiable fact instead of a description; see that run's
+own README for the recorded numbers.
 
-The clean, otherwise-idle-machine reference number that SC2's "≥10% speedup" bar is measured
-against is **not yet captured** — the run above proves the pipeline and the tuning logic work
-end-to-end on real hardware, but an honest idle-machine number requires re-running on a quiet
-machine rather than reusing (or worse, hand-adjusting) the loaded-machine figures above. Once
-captured, the reference table lands here, generated by:
+### Idle-machine reference and the first preset (expected from the Apple M5 run)
+
+Neither case study above is the clean, otherwise-idle-machine reference number that SC2's
+"≥10% speedup" bar is measured against, and **no preset has been committed from either run** —
+`presets/` stays empty until a run with low enough ambient load produces a winning config that
+reflects the chip's actual capability rather than either run's specific load conditions (see
+`CONTRIBUTING.md`'s "Contributing a preset for a new chip" section). That idle reference and the
+first committed preset are expected to come from running `make benchmark` on the Apple M5
+reference machine (see [Apple M5](#apple-m5-sme2) below):
 
 ```bash
 make benchmark   # quiet machine, default reference model + budget/reps
 ```
 
-No numbers are fabricated in the meantime — see [`ASSUMPTIONS.md`](./ASSUMPTIONS.md) #6 and #10
-for the project's policy on this.
+On a busy workstation like the M1 Max above, neonpilot's value isn't a single clean-room
+number — it's *adaptive* tuning that measures the machine as it actually is, and its own
+load-telemetry preflight check (`--strict-idle`, and the "Measurement conditions" line every
+report now carries) is exactly what tells you, per run, whether your numbers are reference-grade
+(low load, the ambient-load caveat absent) or an adaptive result like the two case studies
+above. No numbers are fabricated in the meantime — see [`ASSUMPTIONS.md`](./ASSUMPTIONS.md) #6
+and #10 for the project's policy on this.
 <!-- /RESULTS:M1MAX -->
 
 <!-- RESULTS:M5 -->
