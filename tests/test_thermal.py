@@ -9,8 +9,21 @@ from __future__ import annotations
 import subprocess
 from types import SimpleNamespace
 
-from neonpilot.bench.thermal import cooldown, default_probe_temp_c
+import pytest
+
+from neonpilot.bench.thermal import _adaptive_cooldown, cooldown, default_probe_temp_c
 from neonpilot.models import CooldownPolicy
+
+
+def test_adaptive_cooldown_raises_value_error_when_target_temp_c_is_none():
+    """Carried-over LOW: this used to be a bare `assert target is not None` -- stripped
+    entirely under `python -O`, silently turning an invariant violation into a confusing
+    `TypeError` from comparing against `None` instead of a clear, always-enforced error."""
+    policy = CooldownPolicy(
+        target_temp_c=None, max_cooldown_s=20.0, fixed_delay_s=20.0, idle_skip=True
+    )
+    with pytest.raises(ValueError, match="target_temp_c"):
+        _adaptive_cooldown(policy, 50.0, lambda: 50.0, lambda s: None)
 
 
 def test_idle_skip_when_already_below_target():

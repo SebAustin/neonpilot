@@ -92,7 +92,15 @@ def _adaptive_cooldown(
     sleep_fn: Callable[[float], None],
 ) -> ThermalSnapshot:
     target = policy.target_temp_c
-    assert target is not None  # guarded by caller
+    if target is None:
+        # `assert` was used here previously: stripped entirely under `python -O`, which would
+        # silently turn this into "compare against None" instead of failing loudly. The only
+        # caller (`cooldown()` above) already checks `policy.target_temp_c is not None` before
+        # calling `_adaptive_cooldown`, so reaching this branch means that invariant broke.
+        raise ValueError(
+            "_adaptive_cooldown() requires policy.target_temp_c to be set; "
+            "the caller should have already checked this"
+        )
     if initial_temp <= target:
         return ThermalSnapshot(
             source="idle-skip", cpu_temp_c=initial_temp, throttled=False, cooldown_s=0.0

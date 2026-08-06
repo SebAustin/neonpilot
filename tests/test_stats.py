@@ -1,10 +1,8 @@
-"""Tests for bench/stats.py: median/stddev vs known values, dominates() truth table."""
+"""Tests for bench/stats.py: dominates() truth table."""
 
 from __future__ import annotations
 
-import pytest
-
-from neonpilot.bench.stats import dominates, median, stddev
+from neonpilot.bench.stats import dominates
 from neonpilot.models import BenchSample, RuntimeConfig, TrialResult
 
 _CFG = RuntimeConfig(
@@ -38,29 +36,6 @@ def _trial(trial_id: str, gen_avg_ts: float | None, gen_stddev_ts: float = 0.0) 
         status="ok",
         error=None,
     )
-
-
-def test_median_known_values():
-    assert median([1.0, 2.0, 3.0]) == 2.0
-    assert median([4.0, 1.0, 3.0, 2.0]) == 2.5
-
-
-def test_median_empty_raises():
-    with pytest.raises(ValueError):
-        median([])
-
-
-def test_stddev_known_values():
-    assert stddev([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]) == pytest.approx(2.138, abs=1e-3)
-
-
-def test_stddev_single_value_is_zero():
-    assert stddev([42.0]) == 0.0
-
-
-def test_stddev_empty_raises():
-    with pytest.raises(ValueError):
-        stddev([])
 
 
 def test_dominates_true_when_clearly_faster():

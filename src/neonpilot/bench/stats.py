@@ -1,39 +1,18 @@
-"""Cross-config statistics helpers: median/stddev for reporting, dominance for early stopping.
+"""Cross-config statistics helpers: the dominance rule that drives candidate-level pruning.
 
 Per PLAN.md section 4.3, llama-bench's own `avg_ts`/`stddev_ts` are trusted for *within-config*
 variance (computed over the `-r reps` samples in a single call); this module is used only for
-*cross-config* comparisons -- median/stddev of an arbitrary sample list, and the dominance
-rule that drives candidate-level pruning.
+*cross-config* comparisons -- the statistical-dominance test used for early stopping and (via
+`report/markdown.py`/`report/html.py`) the headline-speedup credibility caveat.
 """
 
 from __future__ import annotations
-
-import statistics
 
 from neonpilot.models import TrialResult
 
 #: Dominance safety margin (PLAN.md section 4.3): best dominates cand iff
 #: best.gen_ts - k*best.stddev > cand.gen_ts + k*cand.stddev
 _DOMINANCE_K = 1.0
-
-
-def median(xs: list[float]) -> float:
-    """Median of a non-empty list of floats.
-
-    :raises ValueError: if `xs` is empty.
-    """
-    if not xs:
-        raise ValueError("median() requires a non-empty list")
-    return statistics.median(xs)
-
-
-def stddev(xs: list[float]) -> float:
-    """Sample standard deviation of `xs`. Returns 0.0 for a single-element list (no variance)."""
-    if not xs:
-        raise ValueError("stddev() requires a non-empty list")
-    if len(xs) == 1:
-        return 0.0
-    return statistics.stdev(xs)
 
 
 def dominates(best: TrialResult, cand: TrialResult) -> bool:
