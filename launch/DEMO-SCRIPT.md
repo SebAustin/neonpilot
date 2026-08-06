@@ -22,6 +22,10 @@ a produced video is wanted; the beats below are also enough to run live.
   measures, not endorsements).
 - Pre-open a terminal tab already `cd`'d into the repo, and a browser tab ready (but not yet
   navigated) for the HTML report.
+- **If the run has load telemetry (feature F-A, any run captured after 2026-08-06), the report's
+  "Measurement conditions" line (loadavg + top process, in the Methodology section) is worth a
+  few extra seconds on camera** — it's the on-screen proof that "how loaded was the machine" is a
+  tool-recorded fact, not a claim in the narration.
 
 ---
 
