@@ -345,3 +345,76 @@ milestone M5 (ASSUMPTIONS.md #6); it is never presented as measured hardware dat
     `sample_chip_report_m5`, itself derived from the already-committed, clearly-labeled-
     synthetic `sysctl_apple_m5_synthetic.txt` fixture -- never presented as a real
     measurement, consistent with that fixture's own header comment).
+
+# Re-review follow-ups (small batch, post-approval)
+
+19. **N2 (compare.py bypassed the H3 synthetic guard):** the "Winning config diff" table read
+    `best.config` directly, so a budget-truncated/never-beat-baseline run's *fabricated*
+    default config rendered as if it were a measured value, complete with a misleading
+    "differs: yes" marker against the other side's real winning config.
+    `_config_diff_rows` now takes both sides' `TrialResult` (not `RuntimeConfig`); when either
+    side's `best.is_synthetic_config` is True, that side's cells read
+    `"defaults (not measured)"` and the differs marker is suppressed for the whole row (a
+    synthetic-vs-measured pairing isn't a meaningful "delta"). Neither golden compare fixture
+    has a synthetic `best`, so `tests/golden/compare.{md,html}` are unchanged; new tests cover
+    the synthetic-vs-measured and still-flags-real-deltas cases explicitly.
+
+20. **N1 (`os.getloadavg()` OSError outside the SysloadError guard):** `os.getloadavg()` can
+    itself raise `OSError` in some restricted/sandboxed containers, even on an otherwise-
+    supported macOS/Linux host -- and it was called unguarded at both call sites (`bench/
+    sysload.py`'s `collect_load_snapshot()` and `cli.py`'s ambient-load preflight), so this
+    advisory telemetry could hard-fail an entire sweep. `collect_load_snapshot()` now catches
+    `OSError` and returns `None` (not a partially-populated snapshot) --
+    `report/_shared.py:measurement_conditions_text` already treats `None` as "no telemetry
+    recorded". `search/engine.CollectLoadFn`'s type widened to `Callable[[], LoadSnapshot |
+    None]` to match. The CLI preflight catches the same `OSError`, prints a one-time warning,
+    and skips the check entirely -- deliberately never aborting, even under `--strict-idle`,
+    since a platform limitation isn't evidence the host is actually busy.
+
+21. **H5 remainder:** `--prompt-n`/`--gen-n` gained `min=1` (matching `--budget`/`--reps`
+    already fixed in the first robustness-review pass). `--gen-n 0` in particular was a real
+    footgun: it silently made every trial's `generation` sample `None`, wasting the full sweep
+    budget before C1's own guard eventually caught it.
+
+22. **N6 (misleading all-errored message):** `_print_sweep_failure` said "no trial completed
+    successfully" even when every trial's llama-bench invocation exited cleanly but produced
+    no generation-throughput row (`best.status == "ok"` yet `best.generation is None` -- no
+    trial-level `.error` string exists to list in that case). The message now branches on
+    `best.status != "ok"` (genuine errors, listed) vs. that status-ok/no-generation case (a
+    distinct, accurate message), covered by a new stub-binary regression test (a fake
+    llama-bench that always exits 0 but never emits a "tg" row).
+
+23. **Carried-over LOWs, all trivial:** removed `bench/stats.py`'s unused `median()`/
+    `stddev()` (only `dominates()` is ever imported elsewhere; their tests removed too).
+    Replaced `bench/thermal.py`'s bare `assert target is not None` with an explicit
+    `raise ValueError` (an `assert` is stripped entirely under `python -O`, silently turning
+    an invariant violation into a confusing `TypeError` instead of a clear, always-enforced
+    error) -- now covered by a direct unit test calling `_adaptive_cooldown` with
+    `target_temp_c=None`. `cli._discover_llama_bin`'s "binary not found" message now mentions
+    both `make fetch-llama` (repo checkout) and `--llama-bin`/`NEONPILOT_LLAMA_BIN` (installed
+    package, no Makefile available).
+
+24. **N4 (RuntimeError catch too broad):** `RecursionError` and `typer.Abort` (click's
+    `Abort`) are both, surprisingly, `RuntimeError` subclasses -- exactly like `typer.Exit`,
+    which the first robustness-review pass already had to special-case. All five CLI command
+    wrappers now exclude `(typer.Exit, typer.Abort, RecursionError)` from the broad
+    `except (OSError, RuntimeError, NotImplementedError)` handler, so a genuine interpreter-
+    level recursion failure or an intentional click abort propagates instead of being
+    re-wrapped as a routine one-line error message.
+
+25. **N3 (skipped, not "genuinely small"):** the coordinator's SIGTERM-cleanup follow-up
+    suggested `start_new_session=True` + `os.killpg()` so a `llama-bench` wrapper script's
+    *grandchild* processes (not just the direct child) are also killed on SIGTERM/Ctrl-C.
+    Implementing that correctly requires replacing `bench/runner.py`'s `subprocess.run()` call
+    with a raw `Popen` + manual `communicate()`/`except`/`killpg()` sequence (`subprocess.run`
+    has no `killpg` hook of its own) -- a real behavioral change to the sole trust-boundary
+    module in this codebase, not a mechanical fix, so it's deliberately deferred rather than
+    rushed into this small follow-up batch. `bench/runner.py`'s existing `process.kill()`-via-
+    `subprocess.run` behavior (killing the direct child only) is unchanged.
+
+26. **N5 (orphan run dirs, skipped per explicit instruction):** `~/.neonpilot/runs/<timestamp>/`
+    directories are never garbage-collected -- every `optimize` invocation (successful or not)
+    leaves its artifacts on disk indefinitely, and repeated runs (e.g. CI, or iterative local
+    tuning) will accumulate them without bound. No code change; noted here as a known, manual-
+    cleanup-only limitation (`rm -rf ~/.neonpilot/runs/<old-timestamp>`) rather than adding
+    retention/pruning logic in this follow-up batch.
