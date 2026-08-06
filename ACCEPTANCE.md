@@ -1,7 +1,8 @@
 # neonpilot — Acceptance Record
 
 **Verifier:** independent solution-verifier (evidence-based; ran the gate, did not trust reports).
-**Date:** 2026-07-20. **Commit at acceptance:** `b9f0b1e` (working tree clean).
+**Date:** 2026-07-20 (initial acceptance); **updated 2026-08-06** for the enhancement pass (§5).
+**Commit at initial acceptance:** `b9f0b1e`. **Commit at enhancement acceptance:** `d4bf5d8` (working tree clean, pushed).
 **Scope:** full M0–M6 acceptance pass. M5 idle-reference numbers and committed presets are
 **OPEN by design** (gated on quiet-machine / second-hardware access), not failures — the
 machinery each depends on is verified working below.
@@ -63,7 +64,9 @@ Fail-fast fires with the download hint and a non-zero exit. `fetch-llama` is ide
 
 ---
 
-## 3. Success-criteria table (REQUIREMENTS.md)
+## 3. Success-criteria table (REQUIREMENTS.md) — initial pass, 2026-07-20
+
+> Superseded where noted by the enhancement-pass table in **§5.5** (SC2 reframed to OPEN-M5).
 
 | SC | Verdict | Evidence (verifier-run) |
 |----|---------|--------------------------|
@@ -143,3 +146,120 @@ the remaining SC2 idle-reference number, SC3 committed presets, and SC6 M5 half 
 quiet-machine and second-hardware access and are documented as open, not fabricated. No
 success criterion is failed by silence or by an unfair baseline; the one headline number that
 exists (+144.2%) is real, statistically dominant, and explicitly scoped to its load conditions.
+
+---
+
+## 5. Enhancement pass (2026-08-05/06)
+
+Verified at commit `d4bf5d8`, working tree clean, `origin` = `https://github.com/SebAustin/neonpilot.git`,
+local HEAD == `origin/main`.
+
+### 5.1 What changed
+
+1. **Robustness review → REWORK → APPROVE.** A dedicated robustness review raised C1, H1–H6,
+   M1–M6 plus follow-ups N1/N2/N4/N6 and a LOW batch. The builder fixed them; the reviewer
+   re-reviewed and **APPROVED**, re-reproducing each fix. Key commits: `bd0ad07` (C1, H2–H6 CLI,
+   M2–M5), `f384bb8` (M4 prep), `67168fe` (N1 `os.getloadavg()` OSError guard at both call
+   sites), `ffcd182` (N2 compare config-diff respects the H3 synthetic guard), `2f5e667`
+   (drop dead `median()`/`stddev()`, replace `assert` with explicit `raise`), `be3f7cf` (log).
+2. **Feature F-A — load telemetry.** `bench/sysload.py` + `LoadSnapshot` recorded as
+   `SweepResult.load_before` / `load_after`; a preflight warning (and `--strict-idle` abort) when
+   the host looks busy; a "Measurement conditions" line rendered in reports.
+3. **Feature F-B — `neonpilot compare`.** `report/compare.py` + `report/_shared.py` (extracted
+   SVG/CSS/escape helpers) render a side-by-side `compare.md` / self-contained `compare.html`:
+   chip ISA feature table with differing rows flagged, per-machine throughput, winning-config
+   diff, and each side's ambient-load conditions.
+4. **Published.** Repo live at `github.com/SebAustin/neonpilot`; all placeholder repo URLs
+   replaced (no `neonpilot/neonpilot` string remains in `pyproject.toml` / `README.md` /
+   `SECURITY.md`). CI green on GitHub `macos-arm64` including the gated integration job.
+5. **Case study #2 committed** at `docs/results/m1-max-moderate-load-20260806/`. README/DEVPOST
+   reframed: M1 Max yields **two load-regime case studies**; the idle reference and first preset
+   are expected from the user's Apple M5 run.
+
+### 5.2 Gate re-run (verifier-run, verbatim tails)
+
+```
+$ make lint
+uv run ruff check .
+All checks passed!
+uv run ruff format --check .
+63 files already formatted
+LINT_EXIT:0
+```
+```
+$ make test
+TOTAL                                    1447     41    97%
+
+Required test coverage of 80.0% reached. Total coverage: 97.17%
+
+======================= 290 passed, 3 skipped in 24.78s ========================
+TEST_EXIT:0
+```
+
+**Remote CI** (`gh run list`): latest `main` push `31098371564` → **success**, 1m11s. Prior three
+`main` runs also success; the 42m run `31049320048` is the cold build that seeded the binary
+cache (warm runs now ~1–3m).
+
+### 5.3 Robustness spot-checks (verifier-reproduced, not builder-reported)
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | All-fail sweep (stub binary that always exits 1) | **PASS** — exit **1**, friendly `optimize failed: no trial completed successfully -- nothing to report.` plus a `run.log` pointer; no traceback |
+| 2 | Invalid budget/reps rejected | **PASS** — `--budget 0`, `--reps 0`, `--prompt-n -5` each exit **2** with a Typer usage error |
+| 3 | `--strict-idle` on a busy host | **PASS** — exit **1**: `--strict-idle: refusing to start -- host load average (5.55) is 0.6x the physical core count (10)` |
+| 4 | Corrupt run artifacts (truncated / empty / valid-JSON-wrong-shape `result.json`) | **PASS** — all exit **1** with `failed to load run artifacts from <dir>: <reason>` (`Unterminated string...`, `Expecting value...`, `SweepResult missing required field 'model_file'`); no traceback |
+| 5 | Synthetic-config guard (H3/N2) in `compare` | **PASS** — a run with `best.is_synthetic_config=true` renders every config-diff cell as `defaults (not measured)`, leaves the "Differs" column blank (no bogus delta), and the winning-config line reads `defaults (as resolved by llama-bench; tuning did not beat the baseline)`; present in both `.md` and `.html` |
+
+### 5.4 New features exercised live
+
+- **`neonpilot compare`** run on the two committed case studies' real `result.json` artifacts
+  (staged into scratch dirs with a `chip.json`, `--out` to scratch): exit **0**, wrote
+  `compare.md` + `compare.html`. Output correctly showed A `9.05 → 22.11 t/s (+144.2%)` vs
+  B `13.24 → 24.05 t/s (+81.6%)`, and flagged `batch`/`ubatch` as the differing config fields.
+  **`compare.html` is self-contained: 0 `http(s)://`, 0 `<script>`, 0 external `src=`/`<link>`.**
+- **Load telemetry.** `docs/results/m1-max-moderate-load-20260806/report.md:43` and
+  `report.html:55` both carry `Measurement conditions: loadavg(1m/5m/15m)=3.78/4.23/3.73, top
+  process: ... Claude Helper (Renderer) (55.3% CPU)`, matching the `load_before` receipt in
+  `result.json`. The `load_after` receipt records loadavg **8.40/6.82/5.30** with
+  `Virtualization.framework` and `WindowServer` at the top — i.e. **the telemetry itself caught
+  the VM returning mid-run**. That receipt is exactly why this run is case study #2 and not the
+  idle reference, and it is the strongest single piece of evidence that the honesty machinery
+  works on real data rather than in principle.
+- Preflight also fired unprompted during check 1: `warning: host load average (5.23) is 0.5x the
+  physical core count (10)`.
+
+### 5.5 SC table updates
+
+| SC | Verdict (this pass) | Change & evidence |
+|----|---------------------|-------------------|
+| SC1 | **PASS** | Unchanged — `Makefile:30-44` wired; fail-fast verified in §2 |
+| **SC2** | **OPEN-M5** *(was OPEN-HONEST)* | **Honest reframe.** Two real Qwen2.5-3B sweeps on the M1 Max both exceed the 10% bar (+144.2% gen, `docs/results/m1-max-loaded-20260720/`; +81.6% gen, `docs/results/m1-max-moderate-load-20260806/`), but both carry load receipts proving non-idle conditions. This machine is an **active workstation and cannot produce reference-grade idle numbers**; the new telemetry enforces that distinction rather than papering over it. The reference-grade number is expected from the Apple M5 run. Bar cleared twice under documented load; canonical idle figure still open. |
+| **SC3** | **OPEN-M5** *(unchanged)* | `presets/` still absent — no preset packaged from either case study, per the documented idle-machine policy (`docs/results/*/README.md`, `CONTRIBUTING.md`). M1 Max + M5 presets both pending the M5 run. |
+| SC4 | **PASS** | Strengthened — CI now green on the **real** GitHub `macos-arm64` runner incl. the gated integration job (`gh run list` → `31098371564` success) |
+| SC5 | **PASS** | Improved — **97.17%** (was 96.83%), floor 80 |
+| SC6 | **PASS (M1 Max); M5 half OPEN** | Unchanged |
+| SC7 | **PASS** | Unchanged; both committed sweeps finished under the 900s budget (543.9s, 480.7s), `budget_truncated=False` |
+| SC8 | **PASS** | Extended — the zero-external-asset guarantee now also covers `compare.html`, verified live and by test |
+| SC9 | **PASS** | Unchanged; `compare` adds a 5th documented subcommand with `--help` |
+| SC10 | **PASS** | Unchanged (`README.md ## Differentiation`) |
+
+### 5.6 Impact on DX
+
+`compare` turns the cross-generation story from prose into a reproducible artifact (it is the
+mechanism that will render the M1 Max ↔ M5 comparison), and the load telemetry converts "trust
+our benchmark" into "here are the machine's load receipts, judge for yourself." Both directly
+serve the project's stated honesty posture rather than adding surface area for its own sake.
+
+### 5.7 Enhancement-pass verdict
+
+**SOLID.** Build green; `make lint` clean; **290 passed / 3 skipped**, 97.17% coverage; remote CI
+green including integration; five robustness fixes independently re-reproduced; both new features
+exercised live with self-contained output; no open Critical/High security findings; repo published
+and in sync. No defects found in this pass.
+
+One observation, **non-blocking and not a defect**: the committed evidence dirs under
+`docs/results/` ship `result.json` + reports but no `chip.json`, so `neonpilot compare` cannot be
+pointed straight at them (it needs both chips' ISA for its feature table). I staged a `chip.json`
+to exercise compare. No documentation instructs otherwise — README's compare section uses generic
+`<run-dir-a>` — so nothing is broken today. If the M5 comparison is meant to be reproducible by a
+judge from the committed artifacts, add `chip.json` to each `docs/results/*` dir at that point.
