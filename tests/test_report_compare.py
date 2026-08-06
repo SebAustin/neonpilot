@@ -146,3 +146,56 @@ def test_compare_accepts_custom_labels(
         label_b="M5 (projected)",
     )
     assert "compare: Dev laptop vs. M5 (projected)" in rendered
+
+
+# --- N2: a synthetic-config side must never render fabricated defaults as measured data -----
+
+
+def test_compare_markdown_config_diff_flags_synthetic_side_instead_of_fabricating_a_delta(
+    sample_sweep_result, sample_chip_report, sample_sweep_result_m5, sample_chip_report_m5
+):
+    """H3/N2: when tuning never beat the baseline on one side, that side's `best.config` is a
+    *fabricated* reconstruction of llama.cpp's own defaults (not a measured winner) -- the
+    config-diff table must say so per-cell instead of rendering it as real data with a
+    misleading 'differs: yes' marker against the other side's genuinely measured config."""
+    synthetic_best_a = dataclasses.replace(sample_sweep_result.best, is_synthetic_config=True)
+    synthetic_result_a = dataclasses.replace(sample_sweep_result, best=synthetic_best_a)
+
+    rendered = render_compare_markdown(
+        synthetic_result_a, sample_chip_report, sample_sweep_result_m5, sample_chip_report_m5
+    )
+
+    for line in rendered.splitlines():
+        if line.startswith("| threads |") or line.startswith("| flash_attn |"):
+            assert "defaults (not measured)" in line
+            assert line.rstrip().endswith("|  |")  # differs marker suppressed
+    assert "threads | 10 | 14 | yes" not in rendered  # the old, misleading fabricated delta
+
+
+def test_compare_html_config_diff_suppresses_highlight_on_synthetic_row(
+    sample_sweep_result, sample_chip_report, sample_sweep_result_m5, sample_chip_report_m5
+):
+    synthetic_best_b = dataclasses.replace(sample_sweep_result_m5.best, is_synthetic_config=True)
+    synthetic_result_b = dataclasses.replace(sample_sweep_result_m5, best=synthetic_best_b)
+
+    rendered = render_compare_html(
+        sample_sweep_result, sample_chip_report, synthetic_result_b, sample_chip_report_m5
+    )
+
+    assert "defaults (not measured)" in rendered
+    # the config-diff table's <tbody> must contain no delta-highlight row once one side is
+    # synthetic (every field's "differs" marker is suppressed for that side)
+    config_diff_section = rendered.split("Winning config diff</h2>")[1]
+    assert "delta-highlight" not in config_diff_section
+
+
+def test_compare_config_diff_still_flags_real_deltas_when_neither_side_is_synthetic(
+    sample_sweep_result, sample_chip_report, sample_sweep_result_m5, sample_chip_report_m5
+):
+    """Guards against an overzealous fix: genuinely differing, fully-measured configs must
+    still be flagged."""
+    rendered = render_compare_markdown(
+        sample_sweep_result, sample_chip_report, sample_sweep_result_m5, sample_chip_report_m5
+    )
+    assert "| threads | 10 | 14 | yes |" in rendered
+    assert "defaults (not measured)" not in rendered

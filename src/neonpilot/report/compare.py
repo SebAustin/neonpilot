@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from neonpilot.models import ChipReport, RuntimeConfig, SweepResult
+from neonpilot.models import ChipReport, RuntimeConfig, SweepResult, TrialResult
 from neonpilot.report._shared import CSS, comparison_chart, esc, measurement_conditions_text
 from neonpilot.report._shared import winning_config_text as _winning_config_text
 
@@ -25,6 +25,10 @@ _CONFIG_FIELDS: list[tuple[str, Callable[[RuntimeConfig], object]]] = [
     ("ubatch", lambda cfg: cfg.ubatch),
 ]
 
+#: N2: shown per-cell (not the fabricated defaults value) whenever that side's winning trial
+#: is synthetic (H3) -- see `_config_diff_rows` below.
+_SYNTHETIC_CELL_TEXT = "defaults (not measured)"
+
 _ConfigDiffRow = tuple[str, str, str, bool]
 
 
@@ -34,13 +38,31 @@ def _all_isa_features(chip_a: ChipReport, chip_b: ChipReport) -> list[str]:
     return sorted(set(chip_a.isa) | set(chip_b.isa))
 
 
-def _config_diff_rows(config_a: RuntimeConfig, config_b: RuntimeConfig) -> list[_ConfigDiffRow]:
-    """Return `(field_label, value_a, value_b, differs)` for every tuned config field."""
+def _config_diff_rows(best_a: TrialResult, best_b: TrialResult) -> list[_ConfigDiffRow]:
+    """Return `(field_label, value_a, value_b, differs)` for every tuned config field.
+
+    N2 (follow-up to H3): `best.config` is a *fabricated* reconstruction of llama.cpp's own
+    defaults whenever `best.is_synthetic_config` is True (tuning never beat that side's
+    baseline) -- rendering it as a plain measured value, with a "differs: yes" marker against
+    the other side's real winning config, would misleadingly present a placeholder as data.
+    When either side is synthetic, that side's cell reads `_SYNTHETIC_CELL_TEXT` instead of
+    the fabricated field value, and the differs marker is suppressed for the whole row (a
+    synthetic-vs-measured comparison isn't a meaningful "delta" to highlight).
+    """
+    any_synthetic = best_a.is_synthetic_config or best_b.is_synthetic_config
     rows = []
     for label, getter in _CONFIG_FIELDS:
-        value_a, value_b = getter(config_a), getter(config_b)
-        rows.append((label, str(value_a), str(value_b), value_a != value_b))
+        cell_a = _config_cell_text(best_a, getter)
+        cell_b = _config_cell_text(best_b, getter)
+        differs = False if any_synthetic else getter(best_a.config) != getter(best_b.config)
+        rows.append((label, cell_a, cell_b, differs))
     return rows
+
+
+def _config_cell_text(best: TrialResult, getter: Callable[[RuntimeConfig], object]) -> str:
+    if best.is_synthetic_config:
+        return _SYNTHETIC_CELL_TEXT
+    return str(getter(best.config))
 
 
 # --- Markdown -----------------------------------------------------------------------------
@@ -60,9 +82,7 @@ def _feature_table_markdown(
 
 def _config_diff_table_markdown(result_a: SweepResult, result_b: SweepResult) -> str:
     lines = ["| Field | A | B | Differs |", "|---|---|---|---|"]
-    for label, value_a, value_b, differs in _config_diff_rows(
-        result_a.best.config, result_b.best.config
-    ):
+    for label, value_a, value_b, differs in _config_diff_rows(result_a.best, result_b.best):
         lines.append(f"| {label} | {value_a} | {value_b} | {'yes' if differs else ''} |")
     return "\n".join(lines)
 
@@ -148,9 +168,7 @@ def _feature_table_html(chip_a: ChipReport, chip_b: ChipReport, label_a: str, la
 
 def _config_diff_table_html(result_a: SweepResult, result_b: SweepResult) -> str:
     rows = []
-    for label, value_a, value_b, differs in _config_diff_rows(
-        result_a.best.config, result_b.best.config
-    ):
+    for label, value_a, value_b, differs in _config_diff_rows(result_a.best, result_b.best):
         row_class = ' class="delta-highlight"' if differs else ""
         rows.append(
             f"<tr{row_class}><td>{esc(label)}</td><td>{esc(value_a)}</td>"
