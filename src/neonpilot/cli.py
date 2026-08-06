@@ -140,9 +140,12 @@ def probe(
     """Detect this host's Arm chip, ISA features, and which llama.cpp fast paths activate."""
     try:
         _probe_impl(json_output)
-    except typer.Exit:
-        # `typer.Exit`/click's `Exit` is (surprisingly) a `RuntimeError` subclass -- must be
-        # let through unmolested, not re-wrapped as if it were a genuine error (M3).
+    except (typer.Exit, typer.Abort, RecursionError):
+        # N4: `typer.Exit`/`typer.Abort` (click's `Exit`/`Abort`) are (surprisingly) both
+        # `RuntimeError` subclasses, and `RecursionError` is a builtin `RuntimeError` subclass
+        # too -- all three must be let through unmolested rather than re-wrapped as if they
+        # were a genuine, recoverable error (M3). Every command below follows this same
+        # pattern.
         raise
     except (OSError, RuntimeError, NotImplementedError) as exc:
         _handle_top_level_error(ctx, exc)
@@ -227,10 +230,10 @@ def optimize(
         ),
     ] = _DEFAULT_REPS,
     prompt_n: Annotated[
-        int, typer.Option("--prompt-n", help="Prefill workload token count.")
+        int, typer.Option("--prompt-n", min=1, help="Prefill workload token count (>=1).")
     ] = _DEFAULT_PROMPT_N,
     gen_n: Annotated[
-        int, typer.Option("--gen-n", help="Generation workload token count.")
+        int, typer.Option("--gen-n", min=1, help="Generation workload token count (>=1).")
     ] = _DEFAULT_GEN_N,
     llama_bin: Annotated[
         Path | None,
@@ -286,7 +289,7 @@ def optimize(
             timeout_s=timeout_s,
             strict_idle=strict_idle,
         )
-    except typer.Exit:
+    except (typer.Exit, typer.Abort, RecursionError):
         raise
     except (OSError, RuntimeError, NotImplementedError) as exc:
         _handle_top_level_error(ctx, exc)
@@ -317,17 +320,33 @@ def _resolve_model_class(model: Path) -> str:
 
 
 def _print_sweep_failure(result: SweepResult, run_dir: Path) -> None:
-    """Robustness review C1: no trial completed successfully, so `result.best` is whatever
-    unmeasured trial `search/_selection.better` fell back to (typically the errored baseline)
-    -- there is no legitimate "best" to report. Print every distinct underlying error instead
-    of a bogus `best: confirm-baseline gen_ts=n/a` line."""
-    all_trials = [result.baseline, *result.trials]
-    errors = sorted({trial.error for trial in all_trials if trial.error})
-    error_console.print(
-        "[red]optimize failed: no trial completed successfully -- nothing to report.[/red]"
-    )
-    for message in errors:
-        error_console.print(f"[red]  - {rich_escape(message)}[/red]")
+    """Robustness review C1: `result.best` has no usable measurement, so there is no
+    legitimate "best" to report -- print a message instead of a bogus
+    `best: confirm-baseline gen_ts=n/a` line.
+
+    N6: this covers two genuinely different situations, so the message must not conflate
+    them. `best.status != "ok"` means every trial (including the baseline) actually errored
+    (a `BenchRunError`, e.g. a broken binary) -- distinct underlying errors are printed.
+    `best.status == "ok"` but `best.generation is None` means every trial's llama-bench
+    invocation *exited cleanly* but never produced a generation-throughput ("tg") sample (e.g.
+    `--gen-n` resolved to 0, or a build of llama-bench that only emits prefill rows) -- there's
+    no per-trial "error" string to list in that case, so a different, accurate message is
+    printed instead of falsely implying every trial errored.
+    """
+    if result.best.status != "ok":
+        error_console.print(
+            "[red]optimize failed: no trial completed successfully -- nothing to report.[/red]"
+        )
+        all_trials = [result.baseline, *result.trials]
+        errors = sorted({trial.error for trial in all_trials if trial.error})
+        for message in errors:
+            error_console.print(f"[red]  - {rich_escape(message)}[/red]")
+    else:
+        error_console.print(
+            "[red]optimize failed: every trial completed but produced no generation-"
+            "throughput sample -- nothing to report (check --gen-n is >=1 and that the "
+            "llama-bench build actually emits a 'tg' row).[/red]"
+        )
     error_console.print(f"[red]see {run_dir / 'run.log'} for full trial-by-trial detail.[/red]")
 
 
@@ -345,8 +364,22 @@ def _check_ambient_load(chip: ChipReport, *, strict_idle: bool) -> None:
     `collect_load_snapshot()`, which also shells out to `ps` for the top-process list) since
     only the ratio is needed here; `engine.run()` separately records the full snapshot as
     `SweepResult.load_before`.
+
+    N1: `os.getloadavg()` itself raises `OSError` on some restricted/sandboxed containers
+    (undocumented-in-behavior but documented-in-signature CPython edge case) even on an
+    otherwise-supported macOS/Linux host. That's a platform limitation, not evidence the host
+    is busy -- so this degrades to skipping the check with a one-time warning, never aborting
+    (even under `--strict-idle`, which would otherwise be a false-positive failure unrelated
+    to actual ambient load).
     """
-    loadavg_1m, _loadavg_5m, _loadavg_15m = sysload.read_loadavg()
+    try:
+        loadavg_1m, _loadavg_5m, _loadavg_15m = sysload.read_loadavg()
+    except OSError as exc:
+        console.print(
+            f"[yellow]warning: could not read host load average ({exc}) -- skipping the "
+            "ambient-load preflight check.[/yellow]"
+        )
+        return
     if chip.total_cores <= 0:
         return
     load_ratio = loadavg_1m / chip.total_cores
@@ -384,7 +417,11 @@ def _optimize_impl(
     binary = str(llama_bin) if llama_bin is not None else _discover_llama_bin()
     if not Path(binary).exists():
         error_console.print(
-            f"[red]llama-bench binary not found at {binary}; run `make fetch-llama` first.[/red]"
+            f"[red]llama-bench binary not found at {binary}. "
+            "In a repo checkout, run `make fetch-llama` first. "
+            "If neonpilot was installed as a package (no Makefile available), point at an "
+            "existing llama-bench build with `--llama-bin PATH` or the NEONPILOT_LLAMA_BIN "
+            "environment variable instead.[/red]"
         )
         raise typer.Exit(code=1)
 
@@ -515,7 +552,7 @@ def report(
     """Render a Markdown + self-contained HTML report from a completed optimize run."""
     try:
         _report_impl(run_dir)
-    except typer.Exit:
+    except (typer.Exit, typer.Abort, RecursionError):
         raise
     except (OSError, RuntimeError, NotImplementedError) as exc:
         _handle_top_level_error(ctx, exc)
@@ -621,7 +658,7 @@ def apply(
     """
     try:
         _apply_impl(preset_path, run_dir, presets_root)
-    except typer.Exit:
+    except (typer.Exit, typer.Abort, RecursionError):
         raise
     except (OSError, RuntimeError, NotImplementedError) as exc:
         _handle_top_level_error(ctx, exc)
@@ -686,7 +723,7 @@ def compare(
     """Render a side-by-side Markdown + HTML comparison of two completed optimize runs."""
     try:
         _compare_impl(run_dir_a, run_dir_b, out)
-    except typer.Exit:
+    except (typer.Exit, typer.Abort, RecursionError):
         raise
     except (OSError, RuntimeError, NotImplementedError) as exc:
         _handle_top_level_error(ctx, exc)

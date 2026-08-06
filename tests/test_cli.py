@@ -72,6 +72,38 @@ def failing_llama_bin(tmp_path) -> Path:
     return script
 
 
+#: N6 regression fixture: every invocation exits 0 (unlike _FAKE_LLAMA_BENCH_ALWAYS_FAILS) but
+#: never emits a "tg" (generation) row, regardless of -n -- simulates a llama-bench build that
+#: only reports prefill throughput, so every trial is status="ok" yet best.generation is None.
+_FAKE_LLAMA_BENCH_NO_TG_ROW = """#!/usr/bin/env python3
+import json
+import sys
+
+
+def get(flag, default, cast):
+    if flag in sys.argv:
+        return cast(sys.argv[sys.argv.index(flag) + 1])
+    return default
+
+
+n_prompt = get("-p", 0, int)
+rows = []
+if n_prompt:
+    rows.append(
+        {"n_prompt": n_prompt, "n_gen": 0, "avg_ts": 50.0, "stddev_ts": 1.0, "samples_ts": [50.0]}
+    )
+print(json.dumps(rows))
+"""
+
+
+@pytest.fixture
+def no_tg_row_llama_bin(tmp_path) -> Path:
+    script = tmp_path / "no-tg-row-llama-bench"
+    script.write_text(_FAKE_LLAMA_BENCH_NO_TG_ROW, encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    return script
+
+
 def test_top_level_help_exits_zero():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
@@ -520,6 +552,45 @@ def test_optimize_all_trials_failing_exits_nonzero_and_reports_errors(tmp_path, 
     assert not (out_dir / "latest").exists()
 
 
+def test_optimize_all_trials_ok_but_no_generation_sample_gives_a_distinct_message(
+    tmp_path, no_tg_row_llama_bin
+):
+    """N6: distinct from the all-errored (C1) case above -- every trial here exits 0
+    (status="ok"), so there is no per-trial `.error` string to list; the message must say so
+    accurately instead of falsely claiming "no trial completed successfully"."""
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF" + b"fake")
+    out_dir = tmp_path / "runs"
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(no_tg_row_llama_bin),
+            "--out",
+            str(out_dir),
+            "--budget",
+            "180",
+            "--reps",
+            "1",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code != 0
+    flat_output = result.output.replace("\n", "").lower()
+    assert "no trial completed successfully" not in flat_output
+    assert "every trial completed but produced no generation" in flat_output
+    assert not (out_dir / "latest").exists()
+
+
 def test_optimize_end_to_end_creates_latest_symlink_after_success(tmp_path, fake_llama_bin):
     """H2: 'latest' is only repointed once a genuinely usable run has finished writing all
     of its artifacts."""
@@ -853,6 +924,48 @@ def test_optimize_no_busy_warning_when_host_is_idle(tmp_path, fake_llama_bin, mo
     assert "noise-dominated" not in result.output.lower()
 
 
+def test_optimize_skips_load_preflight_when_getloadavg_raises_oserror(
+    tmp_path, fake_llama_bin, monkeypatch
+):
+    """N1: os.getloadavg() itself raises OSError in some restricted/sandboxed containers --
+    the preflight must skip the check (warn once) rather than crashing the whole sweep, and
+    must never abort even under --strict-idle (a false positive unrelated to actual load)."""
+    from neonpilot import cli as cli_module
+
+    def fake_read_loadavg():
+        raise OSError("could not obtain load average")
+
+    monkeypatch.setattr(cli_module.sysload, "read_loadavg", fake_read_loadavg)
+
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF" + b"fake")
+
+    result = runner.invoke(
+        app,
+        [
+            "optimize",
+            str(model),
+            "--llama-bin",
+            str(fake_llama_bin),
+            "--out",
+            str(tmp_path / "runs"),
+            "--strict-idle",
+            "--reps",
+            "1",
+            "--prompt-n",
+            "8",
+            "--gen-n",
+            "8",
+            "--cooldown-s",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "skipping the ambient-load preflight check" in result.output.lower()
+    assert "refusing to start" not in result.output.lower()
+
+
 # --- M5: --target-temp-c wiring ---------------------------------------------------------------
 
 
@@ -984,6 +1097,38 @@ def test_probe_shows_full_exception_with_debug_flag(monkeypatch):
 
     assert result.exit_code != 0
     assert isinstance(result.exception, RuntimeError)
+
+
+def test_probe_recursion_error_propagates_uncaught(monkeypatch):
+    """N4: RecursionError is (surprisingly) a RuntimeError subclass -- the M3 top-level
+    handler must not swallow it as if it were a routine, recoverable error; it must propagate
+    so it's visible as the serious interpreter-level failure it actually is."""
+    from neonpilot import cli as cli_module
+
+    def fake_probe_host():
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(cli_module, "probe_host", fake_probe_host)
+    result = runner.invoke(app, ["probe"])
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, RecursionError)
+    assert "error:" not in result.output.lower()  # not rewrapped as a friendly one-liner
+
+
+def test_probe_abort_propagates_uncaught(monkeypatch):
+    """N4: typer.Abort (click's Abort) is also a RuntimeError subclass -- must propagate
+    unmolested, same as typer.Exit."""
+    from neonpilot import cli as cli_module
+
+    def fake_probe_host():
+        raise cli_module.typer.Abort()
+
+    monkeypatch.setattr(cli_module, "probe_host", fake_probe_host)
+    result = runner.invoke(app, ["probe"])
+
+    assert result.exit_code != 0
+    assert "error:" not in result.output.lower()
     assert "error:" not in result.output.lower()
 
 

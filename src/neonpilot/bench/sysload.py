@@ -74,19 +74,33 @@ def read_ps_text() -> str:
 
 
 def read_loadavg() -> tuple[float, float, float]:
-    """Return `(loadavg_1m, loadavg_5m, loadavg_15m)` via `os.getloadavg()`."""
+    """Return `(loadavg_1m, loadavg_5m, loadavg_15m)` via `os.getloadavg()`.
+
+    :raises OSError: `os.getloadavg()` itself raises `OSError` when the load average is
+        unobtainable (documented CPython behavior) -- reproducible today in restricted/
+        sandboxed containers that don't expose `/proc/loadavg` or the equivalent syscall, even
+        on an otherwise-supported macOS/Linux host. Deliberately left unguarded here (a thin
+        pass-through, per this module's own "collector talks to the OS, parser doesn't" split);
+        callers decide how to degrade -- see `collect_load_snapshot` below and `cli.py`'s
+        preflight check.
+    """
     return os.getloadavg()
 
 
-def collect_load_snapshot() -> LoadSnapshot:
+def collect_load_snapshot() -> LoadSnapshot | None:
     """Best-effort host load snapshot for a sweep's start/end (feature F-A).
 
-    Load averages are always available on macOS/Linux (neonpilot's only supported
-    platforms, per `probe.probe_host`); the top-N process list is best-effort and degrades to
-    an empty list if `ps` is unavailable or its output can't be parsed, rather than raising --
-    this telemetry is a "nice to have" for a report caveat, never worth failing a sweep over.
+    Returns `None` (not a partially-populated `LoadSnapshot`) if `os.getloadavg()` itself
+    raises `OSError` (e.g. a restricted/sandboxed container without `/proc/loadavg`) --
+    `report/_shared.py:measurement_conditions_text` already treats `None` as "no telemetry
+    recorded" and omits the report line entirely, which is the right degrade for advisory
+    telemetry: never worth failing a sweep over. The top-N process list is separately
+    best-effort and degrades to an empty list if `ps` is unavailable/unparseable.
     """
-    loadavg_1m, loadavg_5m, loadavg_15m = read_loadavg()
+    try:
+        loadavg_1m, loadavg_5m, loadavg_15m = read_loadavg()
+    except OSError:
+        return None
     try:
         processes = parse_ps_output(read_ps_text())[:_TOP_N_PROCESSES]
     except SysloadError:

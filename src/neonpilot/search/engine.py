@@ -33,10 +33,11 @@ from neonpilot.search import _selection
 from neonpilot.search._stage_runner import CooldownFn, run_stage
 from neonpilot.search._trial import RunBenchFn, execute_trial, pruned_trial
 
-#: Injected collector signature (feature F-A): a zero-arg callable returning a `LoadSnapshot`,
-#: mirroring the `RunBenchFn`/`CooldownFn` dependency-injection pattern already used here so
-#: tests never need a real `ps`/`os.getloadavg()` call.
-CollectLoadFn = Callable[[], LoadSnapshot]
+#: Injected collector signature (feature F-A): a zero-arg callable returning a `LoadSnapshot`
+#: (or `None` when `os.getloadavg()` itself failed -- N1: reproducible in restricted/sandboxed
+#: containers), mirroring the `RunBenchFn`/`CooldownFn` dependency-injection pattern already
+#: used here so tests never need a real `ps`/`os.getloadavg()` call.
+CollectLoadFn = Callable[[], LoadSnapshot | None]
 
 #: Worst-case config count with no pruning (PLAN.md section 4.1: "16 configs"), used as the
 #: initial average-trial-cost estimate before any real timing data exists.

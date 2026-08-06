@@ -108,3 +108,33 @@ def test_collect_load_snapshot_caps_to_top_n_processes(monkeypatch):
     snapshot = collect_load_snapshot()
     assert len(snapshot.top_processes) == 3
     assert [p.comm for p in snapshot.top_processes] == ["a", "b", "c"]
+
+
+def test_read_loadavg_propagates_oserror(monkeypatch):
+    """N1: os.getloadavg() itself raises OSError in some restricted/sandboxed containers even
+    on an otherwise-supported host -- read_loadavg() is a thin pass-through (unguarded by
+    design; callers decide how to degrade), so this must still propagate here."""
+    import neonpilot.bench.sysload as sysload_module
+    from neonpilot.bench.sysload import read_loadavg
+
+    def fake_getloadavg():
+        raise OSError("could not obtain load average")
+
+    monkeypatch.setattr(sysload_module.os, "getloadavg", fake_getloadavg)
+    with pytest.raises(OSError, match="could not obtain load average"):
+        read_loadavg()
+
+
+def test_collect_load_snapshot_returns_none_when_getloadavg_raises_oserror(monkeypatch):
+    """N1: a restricted/sandboxed container without /proc/loadavg (or equivalent) must degrade
+    collect_load_snapshot() to None -- not raise and not fabricate a snapshot -- so
+    report/_shared.py's measurement_conditions_text (which already treats None as "no
+    telemetry recorded") omits the report line entirely instead of the sweep crashing."""
+    import neonpilot.bench.sysload as sysload_module
+
+    def fake_getloadavg():
+        raise OSError("could not obtain load average")
+
+    monkeypatch.setattr(sysload_module.os, "getloadavg", fake_getloadavg)
+
+    assert collect_load_snapshot() is None
