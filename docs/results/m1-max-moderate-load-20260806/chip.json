@@ -1,0 +1,69 @@
+{
+  "chip_id": "apple-m1-max",
+  "chip_name": "Apple M1 Max",
+  "cpu_brand": "Apple M1 Max",
+  "e_cores": 2,
+  "fast_paths": [
+    {
+      "active": false,
+      "feature": "neon",
+      "kernel": "NEON generic dot-product kernel (CPU_REPACK, no KleidiAI micro-kernel)",
+      "why": "NEON present but superseded by a higher KleidiAI tier (dotprod/i8mm/sme2)."
+    },
+    {
+      "active": true,
+      "feature": "dotprod",
+      "kernel": "KleidiAI DOTPROD q4/q8 GEMM",
+      "why": "i8mm ABSENT -> DOTPROD-tier KleidiAI kernels engaged; SME disabled; other quant types via CPU_REPACK q6_K_8x4."
+    },
+    {
+      "active": false,
+      "feature": "i8mm",
+      "kernel": "KleidiAI I8MM q4/q8 GEMM",
+      "why": "i8mm ABSENT -> falls back to a lower KleidiAI tier (dotprod) or CPU_REPACK."
+    },
+    {
+      "active": false,
+      "feature": "sme",
+      "kernel": "SME (non-SME2) kernel",
+      "why": "SME absent -> no SME-family kernels available on this chip."
+    },
+    {
+      "active": false,
+      "feature": "sme2",
+      "kernel": "SME2 kernel (M5)",
+      "why": "SME2 absent -> SME-tier KleidiAI kernels do not engage on this chip."
+    }
+  ],
+  "isa": {
+    "bf16": false,
+    "dotprod": true,
+    "fp16": true,
+    "i8mm": false,
+    "neon": true,
+    "sme": false,
+    "sme2": false,
+    "sve": false,
+    "sve2": false
+  },
+  "p_cores": 8,
+  "platform": "darwin",
+  "probed_at": "2026-08-06T11:26:00.333528+00:00",
+  "ram_gb": 64.0,
+  "raw": {
+    "hw.memsize": "68719476736",
+    "hw.optional.arm.AdvSIMD": "1",
+    "hw.optional.arm.FEAT_BF16": "0",
+    "hw.optional.arm.FEAT_DotProd": "1",
+    "hw.optional.arm.FEAT_FP16": "1",
+    "hw.optional.arm.FEAT_I8MM": "0",
+    "hw.optional.arm.FEAT_SME": "0",
+    "hw.optional.arm.FEAT_SME2": "0",
+    "hw.perflevel0.physicalcpu": "8",
+    "hw.perflevel1.physicalcpu": "2",
+    "hw.physicalcpu": "10",
+    "machdep.cpu.brand_string": "Apple M1 Max"
+  },
+  "schema_version": "1.0.0",
+  "total_cores": 10
+}
