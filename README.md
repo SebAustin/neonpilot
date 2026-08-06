@@ -255,6 +255,10 @@ and #10 for the project's policy on this.
 > M1 Max's DOTPROD-tier), demonstrating the cross-generation ISA story. If M5 access slips past
 > the submission deadline, this section states that plainly rather than fabricating numbers
 > (see [`ASSUMPTIONS.md`](./ASSUMPTIONS.md) #6).
+>
+> **Turnkey handoff for whoever has the M5:** see [`docs/M5-RUNBOOK.md`](./docs/M5-RUNBOOK.md) —
+> three copy-paste commands (`git clone` / `cd` / `bash scripts/quickstart.sh`), ~20-25 minutes
+> end-to-end on a fresh clone, no manual setup steps.
 
 | Metric | Baseline | Tuned | Speedup |
 |---|---|---|---|
