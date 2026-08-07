@@ -418,3 +418,34 @@ milestone M5 (ASSUMPTIONS.md #6); it is never presented as measured hardware dat
     tuning) will accumulate them without bound. No code change; noted here as a known, manual-
     cleanup-only limitation (`rm -rf ~/.neonpilot/runs/<old-timestamp>`) rather than adding
     retention/pruning logic in this follow-up batch.
+
+# Apple M5 Pro idle-machine run (2026-08-07) -- observed engineering wart
+
+27. **Stage A's winner-selection picked the best *measured* Stage-A trial instead of comparing
+    it against the (not-yet-measured) baseline, so Stages B/C explored around an inferior
+    thread count.** In the real M5 Pro sweep (`docs/results/m5-pro-idle-20260807/`), the true
+    baseline (`threads=5`, this chip's own P-core count and `llama.cpp`'s own resolved default)
+    is only measured during the confirm pass, at the end of the sweep -- it is never run as a
+    Stage A candidate. Stage A's own candidate list (`plan.json.stage_a`, derived from topology:
+    `[3, 5, 14, 15]`) *does* include `threads=5`, but only its first candidate, `threads=3`
+    (`A1`, 50.55 gen t/s), was ever actually measured; `A2` (`threads=5`), `A3`, and `A4` were
+    all pruned immediately with zero elapsed time (`trials.json`: `started_at == ended_at` for
+    all three). With no baseline value yet known to compare against, `A1` became the sweep's
+    only incumbent, so Stage A's "winner" resolved to `threads=3` by default -- not because
+    `threads=3` beat `threads=5`, but because `threads=5` was never tried in Stage A at all.
+    Stages B and C then explored flash-attention/KV-cache (`B1`-`B6`) and batch/ubatch
+    (`C1`-`C3`) variants entirely around `threads=3`: every one of those measured trials landed
+    in the 46-48 gen t/s range, well below the `threads=5` baseline's eventual 61.57 t/s
+    (confirmed by the confirm pass, which always re-measures the true baseline before the final
+    comparison). The confirm pass's own fairness check is what caught this: it compared the
+    sweep's best-found tuned candidate (`threads=3, fa=off, ubatch=1024`, confirmed at
+    46.94 t/s) against the freshly re-measured baseline (61.57 t/s) and correctly reported
+    `speedup_gen_pct=0.0` -- defaults win, verdict stays honest -- but roughly 280s of the run's
+    437.9s elapsed time (the Stage A/B/C portion, `A1`'s start to `C3`'s end) was spent
+    benchmarking configs that could never have beaten a baseline that simply hadn't been run
+    yet in Stage A's own comparison set. **Known limitation, not fixed in this pass.** Candidate
+    future fix: Stage A's winner-selection should default to the baseline's own eventual
+    (or, if measuring it earlier is preferred, immediately-measured) throughput whenever the
+    baseline dominates every Stage-A trial that *was* actually measured, rather than always
+    picking the best measured Stage-A candidate regardless of how few of the planned candidates
+    got measured before pruning kicked in.

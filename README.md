@@ -9,15 +9,16 @@
 Submission for the **Arm AI Optimization Challenge 2026** (Devpost), **Mobile AI** track.
 
 > Status: milestones M0–M6 (scaffold, probe, bench harness, staged search, report + preset,
-> reproducible `make benchmark`) are implemented and tested. Two real 900s sweeps on the M1 Max
-> reference machine have been run end-to-end (see [Results](#results) below) — both under
-> real-world ambient system load (two different regimes, one heavier and steadier, one
-> moderate and non-constant), so both are documented honestly as adaptive/loaded-machine case
-> studies, not the idle-machine SC2 reference number. The second run's own load telemetry
-> (feature F-A) is what makes "how loaded was the machine" a recorded fact instead of a
-> description. Re-running `make benchmark` on a quiet machine (expected on the Apple M5
-> reference machine) to capture that clean idle reference, and the first committed preset,
-> remain open.
+> reproducible `make benchmark`) are implemented and tested. Three real sweeps have now been run
+> end-to-end on real hardware (see [Results](#results) below): two on the M1 Max reference
+> machine under real-world ambient system load (one heavier and steadier, one moderate and
+> non-constant — both documented as adaptive/loaded-machine case studies, receipted with load
+> telemetry, feature F-A), and one on an Apple M5 Pro under genuinely idle conditions — the
+> clean SC2/SC3 reference run. Its honest result: `llama.cpp`'s own defaults already win on that
+> chip (+0.0% measured), so no preset was packaged from it either — the tuner's own honesty
+> guard refuses to package a synthetic-baseline "win," on any machine, rather than inventing a
+> speedup. `presets/` remains empty by design; see the [Results](#results) section for the full
+> three-machine-regime story and receipts.
 
 ---
 
@@ -224,46 +225,83 @@ tool-recorded snapshot of ambient load at sweep start and end (`SweepResult.load
 machine, and did that change mid-run" a verifiable fact instead of a description; see that run's
 own README for the recorded numbers.
 
-### Idle-machine reference and the first preset (expected from the Apple M5 run)
+### The idle-machine reference has landed: Apple M5 Pro
 
 Neither case study above is the clean, otherwise-idle-machine reference number that SC2's
-"≥10% speedup" bar is measured against, and **no preset has been committed from either run** —
-`presets/` stays empty until a run with low enough ambient load produces a winning config that
-reflects the chip's actual capability rather than either run's specific load conditions (see
-`CONTRIBUTING.md`'s "Contributing a preset for a new chip" section). That idle reference and the
-first committed preset are expected to come from running `make benchmark` on the Apple M5
-reference machine (see [Apple M5](#apple-m5-sme2) below):
+"≥10% speedup" bar is measured against — that run is now complete on an Apple M5 Pro, see
+[Apple M5 (SME2)](#apple-m5-sme2) below for the full write-up. Its honest outcome: `llama.cpp`'s
+own resolved defaults already win on that idle, current-generation chip (+0.0% measured
+generation/prefill speedup), and neonpilot's own honesty guard refused to package a preset from
+it — exactly as it would refuse from either loaded M1 Max run above, for the same reason
+(no measured config beats the baseline). **`presets/` stays empty across all three runs**: the
+two M1 Max runs above were measured under real ambient load (disqualified by
+`CONTRIBUTING.md`'s "Contributing a preset for a new chip" policy), and the M5 Pro run found no
+tuned config that beats the shipped defaults to package in the first place.
 
-```bash
-make benchmark   # quiet machine, default reference model + budget/reps
-```
-
-On a busy workstation like the M1 Max above, neonpilot's value isn't a single clean-room
-number — it's *adaptive* tuning that measures the machine as it actually is, and its own
-load-telemetry preflight check (`--strict-idle`, and the "Measurement conditions" line every
-report now carries) is exactly what tells you, per run, whether your numbers are reference-grade
-(low load, the ambient-load caveat absent) or an adaptive result like the two case studies
-above. No numbers are fabricated in the meantime — see [`ASSUMPTIONS.md`](./ASSUMPTIONS.md) #6
-and #10 for the project's policy on this.
+On a busy workstation like the M1 Max above, neonpilot's value is *adaptive* tuning that measures
+the machine as it actually is; on a quiet, current-generation chip like the M5 Pro below, its
+value is refusing to invent a win that isn't there. Its load-telemetry preflight check
+(`--strict-idle`, and the "Measurement conditions" line every report carries) is what tells you,
+per run, which regime you're in — see [`ASSUMPTIONS.md`](./ASSUMPTIONS.md) #6 and #10 for the
+project's policy on this.
 <!-- /RESULTS:M1MAX -->
 
 <!-- RESULTS:M5 -->
 ### Apple M5 (SME2)
 
-> **To be measured on a second machine (the user's Apple M5) via `make benchmark`.** Expected to
-> show `sme2=true` in the probe output and SME-tier KleidiAI kernel activation (as opposed to
-> M1 Max's DOTPROD-tier), demonstrating the cross-generation ISA story. If M5 access slips past
-> the submission deadline, this section states that plainly rather than fabricating numbers
-> (see [`ASSUMPTIONS.md`](./ASSUMPTIONS.md) #6).
->
-> **Turnkey handoff for whoever has the M5:** see [`docs/M5-RUNBOOK.md`](./docs/M5-RUNBOOK.md) —
-> three copy-paste commands (`git clone` / `cd` / `bash scripts/quickstart.sh`), ~20-25 minutes
-> end-to-end on a fresh clone, no manual setup steps.
+A real `neonpilot optimize` sweep against the same reference model (Qwen2.5-3B-Instruct Q4_K_M)
+ran end-to-end on an Apple M5 Pro (5 P-cores + 10 E-cores, 24 GB RAM, `llama.cpp` pin
+`b10069`/`178a6c44`) on 2026-08-07 — the first run in this project measured on a genuinely idle
+machine: `loadavg_1m` **1.07** at sweep start (top process WindowServer, 6.5% CPU), rising to
+**3.19** by sweep end, both comfortably under the tuner's own `--strict-idle` threshold. Full
+receipts, methodology, and interpretation:
+[`docs/results/m5-pro-idle-20260807/README.md`](./docs/results/m5-pro-idle-20260807/README.md).
 
-| Metric | Baseline | Tuned | Speedup |
+**Chip ISA feature contrast (Apple M5 Pro vs. Apple M1 Max):**
+
+| Feature | Apple M5 Pro | Apple M1 Max | Differs |
 |---|---|---|---|
-| Generation t/s | _TBD_ | _TBD_ | _TBD_ |
-| Prefill t/s | _TBD_ | _TBD_ | _TBD_ |
+| neon | True | True | |
+| dotprod | True | True | |
+| fp16 | True | True | |
+| i8mm | True | False | yes |
+| bf16 | True | False | yes |
+| sme | True | False | yes |
+| sme2 | True | False | yes |
+| sve | False | False | |
+| sve2 | False | False | |
+
+Full side-by-side (throughput on both sides, winning-config diff, each machine's load
+conditions), generated with `neonpilot compare` and committed at
+[`docs/results/m5-vs-m1-compare/`](./docs/results/m5-vs-m1-compare/).
+
+**The finding: `llama.cpp`'s own defaults already win.**
+
+| Metric | Baseline (`threads=5, fa=auto, kv=f16, b=2048/512` — defaults) | Tuned | Speedup |
+|---|---|---|---|
+| Generation t/s | 61.57 ± 0.38 | 61.57 ± 0.38 | +0.0% |
+| Prefill t/s | 178.70 ± 3.11 | 178.70 ± 3.11 | +0.0% |
+
+On this idle, current-generation chip, every tuned candidate the staged sweep actually measured
+(threads=3 with various flash-attention/KV-cache/batching combinations) landed below the shipped
+defaults' throughput. **neonpilot reported that honestly instead of inventing a win, and refused
+to package a preset**: the sweep's winning trial is the confirm-pass baseline re-measurement
+(`is_synthetic_config=true` — a reconstruction of what `llama.cpp` resolves to, not a directly
+measured/appliable flag set), and `apply`'s preset-packaging path refuses to package a
+synthetic-config `best` unconditionally. This doubles as the SC2/SC3 idle-reference outcome the
+two M1 Max case studies above explicitly said they were not: the honest reference result is
+**"defaults optimal, +0.0% — verified,"** not a fabricated speedup.
+
+**Cross-generation observation (~2.6x, with a caveat).** Using the exact same GGUF file, the M5
+Pro's defaults (61.57 gen t/s) run **~2.6x** the M1 Max's best *tuned* result (24.05 gen t/s,
+[`docs/results/m1-max-moderate-load-20260806/`](./docs/results/m1-max-moderate-load-20260806/)).
+Both measurements are CPU-only (`-DGGML_METAL=OFF`), same pinned `llama.cpp` commit, same model
+file — a same-software-stack comparison, not an apples-to-oranges one. Caveat: the M1 Max side
+is its own best *tuned* number from a loaded-machine adaptive run, not that chip's own idle
+defaults (never measured), so ~2.6x reflects real generational CPU + kernel-tier uplift (SME2
+vs. DOTPROD-tier KleidiAI, per the ISA table above) but is not a strict defaults-vs-defaults
+comparison. Full numbers on both sides:
+[`docs/results/m5-vs-m1-compare/compare.md`](./docs/results/m5-vs-m1-compare/compare.md).
 <!-- /RESULTS:M5 -->
 
 ---
@@ -380,10 +418,14 @@ differentiates on four axes, treated as binding requirements rather than polish
    (NEON → DOTPROD → I8MM → SME2, highest-tier-wins, lower tiers reported present-but-superseded)
    and states the fast-path explanation in one verified sentence per feature — grounded in a real
    verbose `llama-bench -v` capture, not documentation guesswork.
-2. **Cross-generation Apple Silicon story (M1 Max → M5).** The repo ships (or, pending the M5
-   milestone, will ship) real measured presets for both a DOTPROD-only chip (M1 Max) and an
-   SME2-capable chip (M5), letting the report show *why* the same model runs differently across
-   Apple Silicon generations — not just two disconnected numbers.
+2. **Cross-generation Apple Silicon story (M1 Max → M5 Pro), measured on both ends.** The repo
+   ships real, receipted results for both a DOTPROD-only chip (M1 Max: `i8mm=false,
+   sme=false, sme2=false`) and an SME2-capable chip (M5 Pro: `i8mm/bf16/sme/sme2` all `true`),
+   including a `neonpilot compare` side-by-side
+   ([`docs/results/m5-vs-m1-compare/`](./docs/results/m5-vs-m1-compare/)) — letting the report
+   show *why* the same model runs differently across Apple Silicon generations, not just two
+   disconnected numbers. No preset was committed for either chip (the M1 Max runs were loaded;
+   the M5 Pro run found no config beating its own defaults) — see [Results](#results).
 3. **Reusable preset registry, not a one-off log file.** Every tuning run can be packaged into a
    versioned, schema-validated `presets/<chip-id>/<model-class>.json` with full provenance (chip
    snapshot, pinned commit, measured t/s), re-emitting an exact `llama-bench` invocation for

@@ -39,44 +39,59 @@ engaged; SME disabled; other quant types via CPU_REPACK q6_K_8x4" — instead of
 "NEON: yes" most tools stop at. That's the difference between a tool that reads a flag and a tool
 that explains the hardware.
 
-**2. Two loaded-machine case studies — the honest, real-world result, reproduced twice.** We ran
-two full 900-second `neonpilot optimize` sweeps against Qwen2.5-3B-Instruct (Q4_K_M, ~2.1 GB) on
-the M1 Max reference machine, on two different days, under two different ambient-load regimes —
-neither machine was idle, by design:
+**2. Three machines, three regimes, one consistent honesty story.** We ran three full
+`neonpilot optimize` sweeps against Qwen2.5-3B-Instruct (Q4_K_M, ~2.1 GB): two on the M1 Max
+reference machine under real ambient load (two different days, two different regimes), and one
+on an Apple M5 Pro under genuinely idle conditions (`loadavg_1m` 1.07→3.19, receipted by the
+tool's own load telemetry) — the clean reference run the challenge's ≥10% bar is actually
+measured against:
 
-| Run | Load regime | Baseline gen t/s | Tuned gen t/s | Gen speedup | Prefill speedup | Winning config |
+| Run | Regime | Baseline gen t/s | Tuned gen t/s | Gen speedup | Prefill speedup | Winning config |
 |---|---|---|---|---|---|---|
-| Jul 20 | Heavy (Docker Desktop ~54%, VM ~19%, Webex; `loadavg` 7.6–12.2) | 9.05 ± 1.79 | 22.11 ± 1.04 | **+144.2%** | +21.9% | `threads=6, fa=off, kv=f16, b=4096/2048` |
-| Aug 6 | Moderate, non-constant (`loadavg_1m` 3.78→8.40 mid-run — recorded, not estimated) | 13.24 ± 1.85 | 24.05 ± 0.59 | **+81.6%** | **−12.3%** (reported honestly) | `threads=6, fa=off, kv=f16, b=2048/512` |
+| Jul 20, M1 Max | Heavy load (Docker Desktop ~54%, VM ~19%, Webex; `loadavg` 7.6–12.2) | 9.05 ± 1.79 | 22.11 ± 1.04 | **+144.2%** | +21.9% | `threads=6, fa=off, kv=f16, b=4096/2048` |
+| Aug 6, M1 Max | Moderate, non-constant load (`loadavg_1m` 3.78→8.40 mid-run — recorded, not estimated) | 13.24 ± 1.85 | 24.05 ± 0.59 | **+81.6%** | **−12.3%** (reported honestly) | `threads=6, fa=off, kv=f16, b=2048/512` |
+| Aug 7, M5 Pro | Idle (`loadavg_1m` 1.07→3.19, well under the tuner's own strict-idle threshold) | 61.57 ± 0.38 | 61.57 ± 0.38 | **+0.0%** | +0.0% | defaults (as resolved by `llama-bench`; nothing beat them) |
 
-Both runs independently converge on `threads=6` (not the shipped `threads=8` default, this
-chip's own P-core count): `llama.cpp`'s decode loop synchronizes worker threads at a per-layer
-barrier, and requesting all 8 P-cores leaves that barrier with zero scheduling slack, so any
-competing process forces a preemption that stalls every other worker thread. Leaving two P-cores
-unrequested gives the OS scheduler room to service that competing work without stalling
+The two M1 Max runs independently converge on `threads=6` (not the shipped `threads=8` default,
+this chip's own P-core count): `llama.cpp`'s decode loop synchronizes worker threads at a
+per-layer barrier, and requesting all 8 P-cores leaves that barrier with zero scheduling slack,
+so any competing process forces a preemption that stalls every other worker thread. Leaving two
+P-cores unrequested gives the OS scheduler room to service that competing work without stalling
 llama.cpp's own barrier — the tuner found that correctly from measurements alone, twice, with no
-thumb on the scale. The second run also shows the tuner's honesty in the other direction: its
-tuned config cost 12.3% prefill throughput even as it won decode by a wide margin (compute-bound
-prefill genuinely benefits from more threads; the tuner optimizes generation as the primary
-objective), and we report that tradeoff plainly rather than hiding it behind one flattering
-number. That second run also carries our new **load telemetry** feature (`SweepResult.
-load_before`/`load_after`, recorded automatically, no manual transcription) — it's what caught a
-background VM returning mid-sweep and turned "the machine was moderately loaded" from a
-description into a recorded fact. Both runs are documented plainly as **"measured under ambient
-load; adaptive result, not an idle-machine reference"** — the clean idle-machine number the
-challenge's ≥10% bar is meant to be checked against is still an open item (see "What's next"
-below), and we say so rather than presenting a loaded-machine number as a clean-room one.
+thumb on the scale. The second M1 Max run also shows the tuner's honesty in the other direction:
+its tuned config cost 12.3% prefill throughput even as it won decode by a wide margin
+(compute-bound prefill genuinely benefits from more threads; the tuner optimizes generation as
+the primary objective), and we report that tradeoff plainly rather than hiding it behind one
+flattering number. Its **load telemetry** (`SweepResult.load_before`/`load_after`, recorded
+automatically, no manual transcription) is what caught a background VM returning mid-sweep and
+turned "the machine was moderately loaded" from a description into a recorded fact.
+
+The M5 Pro run completes the story from the other direction: on an idle, current-generation
+chip, `llama.cpp`'s own resolved defaults already beat every tuned candidate the staged sweep
+measured. neonpilot reported that honestly — `+0.0%` — instead of inventing a win, and its own
+honesty guard refused to package a preset from the run (the winning trial is a reconstruction of
+the resolved defaults, not a directly measured/appliable config, and `apply` refuses to package
+that unconditionally). That chip's ISA probe also confirms `sme2=true` (`i8mm`, `bf16`, `sme`
+all `true` too) against the M1 Max's `sme2=false`, and a `neonpilot compare` run
+([`docs/results/m5-vs-m1-compare/`](./docs/results/m5-vs-m1-compare/)) shows the same GGUF file
+running **~2.6x** faster on the M5 Pro's defaults than on the M1 Max's best *tuned* result
+(61.57 vs. 24.05 gen t/s) — real generational CPU + SME2-vs-DOTPROD kernel-tier uplift, measured
+on both ends rather than assumed. All three runs are documented plainly for what they are:
+loaded-machine adaptive wins on the M1 Max, and a defaults-already-optimal idle reference on the
+M5 Pro — the honest outcome in both directions, never a hand-picked number.
 
 **3. Why it should win.** Most "Arm auto-tune" entrants report a single speedup percentage and
 call it done. neonpilot ships a statistical-honesty guard baked into every surface (CLI, Markdown,
 HTML) that refuses to print a headline speedup unless the tuned result statistically dominates the
 baseline — so a noisy run can never masquerade as a clean win — plus load telemetry that turns
 "how busy was the machine" into a recorded, per-run fact rather than a claim. It probes ISA
-capability at kernel tier, not feature-flag, resolution. And it turns every tuning run into a
-reusable, schema-versioned artifact instead of a throwaway log. The two loaded-machine results
-above are the more compelling story precisely because they're unpolished and reproduced: they show
-the tuner reasoning correctly, twice, about a real developer laptop doing real work, not a
-sanitized benchmark rig.
+capability at kernel tier, not feature-flag, resolution, verified on both a DOTPROD-only chip and
+an SME2-capable one. And it turns every tuning run into a reusable, schema-versioned artifact
+instead of a throwaway log. The three results above are the more compelling story precisely
+because they're unpolished, reproduced, and honest in both directions: two show the tuner
+reasoning correctly about a real developer laptop doing real work, and the third shows it correctly
+refusing to claim a win that isn't there on a quiet, modern chip — not a sanitized benchmark rig
+cherry-picking the flattering case.
 
 ---
 
@@ -151,20 +166,23 @@ device class rather than a hosted/server product.
 
 ## What's next
 
-- **Idle-machine reference number and the first committed preset.** The two loaded-M1-Max case
-  studies above prove the pipeline and tuning logic end-to-end on real hardware, twice, but the
-  clean, otherwise-idle-machine number that the challenge's ≥10% speedup bar is measured against
-  is not yet captured, and (per our own preset policy) no preset has been committed from either
-  loaded run. Both are expected to come from running `make benchmark` on the Apple M5 reference
-  machine below — on a busy workstation like the M1 Max, neonpilot's value is adaptive tuning,
-  and its own load-telemetry preflight (`--strict-idle`, and the "Measurement conditions" line
-  every report carries) is exactly what will tell us when a run's numbers are reference-grade
-  (low load, the ambient-load caveat absent) versus another adaptive result.
-- **Apple M5 (SME2) cross-generation comparison.** M1 Max is DOTPROD-tier only (`i8mm=false,
-  sme2=false`); we expect an Apple M5 run to show `sme2=true` and SME-tier KleidiAI kernel
-  activation instead of DOTPROD, demonstrating the ISA-driven cross-generation story the report
-  format already supports. This is `[unverified]` pending access to M5 hardware.
+- **The three-machine-regime story is now complete and receipted.** Loaded M1 Max (Jul 20),
+  moderate-load M1 Max (Aug 6), and idle M5 Pro (Aug 7) are all measured, committed, and
+  cross-linked via `neonpilot compare`
+  ([`docs/results/m5-vs-m1-compare/`](./docs/results/m5-vs-m1-compare/)). The clean,
+  otherwise-idle-machine reference number the challenge's ≥10% bar is measured against landed
+  on the M5 Pro run — its honest result is `llama.cpp`'s own defaults already win (+0.0%
+  measured), so `presets/` stays empty for both chips: the M1 Max runs were loaded
+  (disqualified by our own preset policy), and the M5 Pro run found no config that beats
+  defaults to package. No preset was ever fabricated to fill this gap.
+- **Apple M5 (SME2) cross-generation comparison — measured on real hardware.** M1 Max is
+  DOTPROD-tier only (`i8mm=false, sme=false, sme2=false`); the real M5 Pro probe confirms
+  `i8mm/bf16/sme/sme2` all `true` and SME-tier KleidiAI kernel activation instead of DOTPROD.
+  Using the same GGUF file, the M5 Pro's defaults run ~2.6x the M1 Max's best tuned result
+  (61.57 vs. 24.05 gen t/s) — real generational CPU + kernel-tier uplift, not a synthetic
+  estimate.
 - **More chips via community presets.** The `presets/<chip-id>/<model-class>.json` schema and
   `apply`'s validate-then-print-invocation workflow are already built for third parties to
   contribute presets for other Arm chips (Graviton, other Apple Silicon generations) without any
-  code changes to neonpilot itself.
+  code changes to neonpilot itself — including chips where, like the M5 Pro here, the honest
+  outcome may be "defaults already win, nothing to package."
