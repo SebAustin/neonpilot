@@ -21,3 +21,6 @@ runs/
 .DS_Store
 .vscode/
 .idea/
+
+# Local editor config
+.cursor/
