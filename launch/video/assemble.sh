@@ -20,7 +20,7 @@
 # real minutes and produces a *different* real run every time). Re-run this script freely;
 # it only touches gitignored segments/, assets/, and tmp/ output.
 #
-# Segment target durations (seconds) -- sum is 165s = 2:45, 5s under the 2:50 hard cap. Each
+# Segment target durations (seconds) -- sum is 168s = 2:48, 2s under the 2:50 hard cap. Each
 # segment is force-trimmed/padded to its target via `force_duration` so the final total is
 # exact regardless of small VHS/ffmpeg timing jitter on a re-recording.
 set -euo pipefail
@@ -34,7 +34,7 @@ TITLE_DUR=12
 PROBE_DUR=33
 OPTIMIZE_DUR=55
 REPORT_DUR=25
-COMPARE_DUR=25
+COMPARE_DUR=28
 CLOSE_DUR=15
 
 FPS=25
@@ -233,19 +233,30 @@ ffmpeg -y -v error -i tmp/04-report-timed.mp4 -i "$CAP_REPORT" \
   segments/04-report-final.mp4
 
 ################################################################################
-# Segment 5: compare
+# Segment 5: compare (Apple M5 Pro vs. Apple M1 Max -- cross-generation, real hardware)
 ################################################################################
 log "5/6 compare"
 require_file segments/05-compare-raw.mp4 "run: vhs tapes/05-compare.tape"
 
 force_duration segments/05-compare-raw.mp4 "$COMPARE_DUR" tmp/05-compare-timed.mp4
 
-CAP_COMPARE=$(caption_png compare \
-  "Two load regimes, one consistent finding: leave cores for the machine you actually have. M5/SME2 comparison lands here next.")
+# Three caption beats, timed to the tape's fixed Type/Sleep buffers (TypingSpeed=45ms/char,
+# deterministic run-to-run): the ISA feature table, then each machine's throughput verdict,
+# in the order they scroll into view.
+CAP_COMPARE_ISA=$(caption_png compare-isa \
+  "M5 Pro: SME2, i8mm, BF16 -- probed, not assumed")
+CAP_COMPARE_M5=$(caption_png compare-m5 \
+  "Idle M5: defaults win -- neonpilot reports +0.0% rather than faking a speedup")
+CAP_COMPARE_M1=$(caption_png compare-m1 \
+  "Loaded M1 Max: +81.6% by adapting. Honest both ways.")
 
-ffmpeg -y -v error -i tmp/05-compare-timed.mp4 -i "$CAP_COMPARE" \
-  -filter_complex "[0:v][1:v]overlay=0:0:enable='between(t,3,${COMPARE_DUR}-1)',format=yuv420p[vout]" \
-  -map "[vout]" -map 0:a "${VCODEC_ARGS[@]}" -c:a copy \
+ffmpeg -y -v error -i tmp/05-compare-timed.mp4 \
+  -i "$CAP_COMPARE_ISA" -i "$CAP_COMPARE_M5" -i "$CAP_COMPARE_M1" \
+  -filter_complex "
+    [0:v][1:v]overlay=0:0:enable='between(t,9.5,13.3)'[v1];
+    [v1][2:v]overlay=0:0:enable='between(t,16.0,20.6)'[v2];
+    [v2][3:v]overlay=0:0:enable='between(t,23.4,${COMPARE_DUR}-0.3)',format=yuv420p[vout]
+  " -map "[vout]" -map 0:a "${VCODEC_ARGS[@]}" -c:a copy \
   segments/05-compare-final.mp4
 
 ################################################################################
