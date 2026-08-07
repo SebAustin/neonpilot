@@ -1,0 +1,119 @@
+{
+  "baseline": null,
+  "notes": [
+    "Stage A (threads): candidates derived from topology (p_cores=5, total_cores=15) -> [3, 5, 14, 15]; winner by generation t/s, ties broken by prefill t/s then fewer threads.",
+    "Stage B (flash-attention x KV-cache): flash_attn in {off, on} x cache_type in {f16, q8_0, q4_0}, threads fixed to Stage A's winner; winner by generation t/s, ties broken by prefill t/s then smaller KV cache.",
+    "Stage C (batch/ubatch): (b, ub) in {(2048,512), (2048,1024), (4096,2048)}, threads/flash_attn/cache_type fixed to Stage A/B winners; winner by prefill t/s among candidates that do not statistically regress generation t/s vs Stage B's winner.",
+    "Budget: 1500s wall-clock, 5 reps/config, prompt_n=512, gen_n=128."
+  ],
+  "stage_a": [
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 3,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 14,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 15,
+      "ubatch": 512
+    }
+  ],
+  "stage_b": [
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q8_0",
+      "flash_attn": "off",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "q4_0",
+      "cache_type_v": "q4_0",
+      "flash_attn": "off",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "on",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q8_0",
+      "flash_attn": "on",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "q4_0",
+      "cache_type_v": "q4_0",
+      "flash_attn": "on",
+      "threads": 5,
+      "ubatch": 512
+    }
+  ],
+  "stage_c": [
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 5,
+      "ubatch": 512
+    },
+    {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 5,
+      "ubatch": 1024
+    },
+    {
+      "batch": 4096,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 5,
+      "ubatch": 2048
+    }
+  ]
+}

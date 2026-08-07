@@ -1,0 +1,69 @@
+{
+  "chip_id": "apple-m5-pro",
+  "chip_name": "Apple M5 Pro",
+  "cpu_brand": "Apple M5 Pro",
+  "e_cores": 10,
+  "fast_paths": [
+    {
+      "active": false,
+      "feature": "neon",
+      "kernel": "NEON generic dot-product kernel (CPU_REPACK, no KleidiAI micro-kernel)",
+      "why": "NEON present but superseded by a higher KleidiAI tier (dotprod/i8mm/sme2)."
+    },
+    {
+      "active": false,
+      "feature": "dotprod",
+      "kernel": "KleidiAI DOTPROD q4/q8 GEMM",
+      "why": "dotprod present but superseded by a higher-tier kernel (i8mm/sme2)."
+    },
+    {
+      "active": false,
+      "feature": "i8mm",
+      "kernel": "KleidiAI I8MM q4/q8 GEMM",
+      "why": "i8mm present but superseded by SME2, the higher-tier kernel on this chip."
+    },
+    {
+      "active": true,
+      "feature": "sme",
+      "kernel": "SME (non-SME2) kernel",
+      "why": "SME present -> SME kernels available (tier below SME2 if SME2 absent)."
+    },
+    {
+      "active": true,
+      "feature": "sme2",
+      "kernel": "SME2 kernel (M5)",
+      "why": "SME2 present -> SME-tier KleidiAI kernels engage for q4/q8 GEMM (Apple M5+)."
+    }
+  ],
+  "isa": {
+    "bf16": true,
+    "dotprod": true,
+    "fp16": true,
+    "i8mm": true,
+    "neon": true,
+    "sme": true,
+    "sme2": true,
+    "sve": false,
+    "sve2": false
+  },
+  "p_cores": 5,
+  "platform": "darwin",
+  "probed_at": "2026-08-07T02:23:38.947669+00:00",
+  "ram_gb": 24.0,
+  "raw": {
+    "hw.memsize": "25769803776",
+    "hw.optional.arm.AdvSIMD": "1",
+    "hw.optional.arm.FEAT_BF16": "1",
+    "hw.optional.arm.FEAT_DotProd": "1",
+    "hw.optional.arm.FEAT_FP16": "1",
+    "hw.optional.arm.FEAT_I8MM": "1",
+    "hw.optional.arm.FEAT_SME": "1",
+    "hw.optional.arm.FEAT_SME2": "1",
+    "hw.perflevel0.physicalcpu": "5",
+    "hw.perflevel1.physicalcpu": "10",
+    "hw.physicalcpu": "15",
+    "machdep.cpu.brand_string": "Apple M5 Pro"
+  },
+  "schema_version": "1.0.0",
+  "total_cores": 15
+}

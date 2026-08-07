@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neonpilot report: Apple M5 Pro / qwen2.5-3b-instruct-q4_k_m</title>
+<style>
+:root {
+  --bg: #0b0d12; --fg: #e8e8ec; --accent: #4fd1c5; --accent2: #f6ad55;
+  --muted: #9aa0ab; --border: #242832; --surface: #161a22;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); margin: 0; padding: 2rem; line-height: 1.5;
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+h1, h2 { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
+th { background: var(--surface); }
+.bar-baseline { fill: var(--muted); }
+.bar-tuned { fill: var(--accent); }
+.chart-title { fill: var(--fg); font-size: 13px; }
+.bar-label { fill: var(--fg); font-size: 12px; }
+.caveat { color: var(--accent2); border-left: 3px solid var(--accent2); padding-left: 0.75rem; }
+.delta-highlight { background: rgba(246, 173, 85, 0.18); }
+section { margin-bottom: 2rem; }
+code { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>neonpilot report: Apple M5 Pro / qwen2.5-3b-instruct-q4_k_m</h1>
+<p>Model file: <code>qwen2.5-3b-instruct-q4_k_m.gguf</code> | llama.cpp commit: <code>178a6c44937154dc4c4eff0d166f4a044c4fceba</code> | schema: <code>1.0.0</code></p>
+<p class="caveat">Statistical caution: the measured generation speedup does not clear the dominance margin used for early-stopping -- baseline and tuned throughput confidence bands overlap (k=1.0, PLAN.md section 4.3). Treat the headline percentage as noisy, not proven; consider re-running with more repetitions (--reps) or on a quieter machine before trusting it.</p>
+<section>
+<h2>Baseline vs. tuned</h2>
+<svg viewBox="0 0 440 96" role="img" aria-label="Generation throughput comparison chart"><text x="0" y="14" class="chart-title">Generation throughput</text><rect x="0" y="24" width="290.0" height="26" class="bar-baseline"></rect><text x="298.0" y="42" class="bar-label">Baseline: 61.57 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 61.57 t/s</text></svg>
+<svg viewBox="0 0 440 96" role="img" aria-label="Prefill throughput comparison chart"><text x="0" y="14" class="chart-title">Prefill throughput</text><rect x="0" y="24" width="290.0" height="26" class="bar-baseline"></rect><text x="298.0" y="42" class="bar-label">Baseline: 178.70 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 178.70 t/s</text></svg>
+<p>Generation speedup: +0.0% | Prefill speedup: +0.0%</p>
+</section>
+<section>
+<h2>Chip ISA features</h2>
+<table><thead><tr><th>Feature</th><th>Present</th></tr></thead><tbody><tr><td>bf16</td><td>True</td></tr><tr><td>dotprod</td><td>True</td></tr><tr><td>fp16</td><td>True</td></tr><tr><td>i8mm</td><td>True</td></tr><tr><td>neon</td><td>True</td></tr><tr><td>sme</td><td>True</td></tr><tr><td>sme2</td><td>True</td></tr><tr><td>sve</td><td>False</td></tr><tr><td>sve2</td><td>False</td></tr></tbody></table>
+</section>
+<section>
+<h2>llama.cpp fast-path activation</h2>
+<table><thead><tr><th>Feature</th><th>Kernel</th><th>Active</th><th>Why</th></tr></thead><tbody><tr><td>neon</td><td>NEON generic dot-product kernel (CPU_REPACK, no KleidiAI micro-kernel)</td><td>False</td><td>NEON present but superseded by a higher KleidiAI tier (dotprod/i8mm/sme2).</td></tr><tr><td>dotprod</td><td>KleidiAI DOTPROD q4/q8 GEMM</td><td>False</td><td>dotprod present but superseded by a higher-tier kernel (i8mm/sme2).</td></tr><tr><td>i8mm</td><td>KleidiAI I8MM q4/q8 GEMM</td><td>False</td><td>i8mm present but superseded by SME2, the higher-tier kernel on this chip.</td></tr><tr><td>sme</td><td>SME (non-SME2) kernel</td><td>True</td><td>SME present -&gt; SME kernels available (tier below SME2 if SME2 absent).</td></tr><tr><td>sme2</td><td>SME2 kernel (M5)</td><td>True</td><td>SME2 present -&gt; SME-tier KleidiAI kernels engage for q4/q8 GEMM (Apple M5+).</td></tr></tbody></table>
+</section>
+<section>
+<h2>Methodology</h2>
+<ul>
+<li>Repetitions per config: 5 (prompt_n=512, gen_n=128)</li>
+<li>Wall-clock budget: 1500s; actual elapsed: 437.9s</li>
+<li>Winning config: defaults (as resolved by llama-bench; tuning did not beat the baseline)</li>
+<li>Measurement conditions: loadavg(1m/5m/15m)=1.07/1.48/1.76, top process: /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (6.5% CPU)</li>
+</ul>
+</section>
+<section>
+<h2>All trials</h2>
+<table><thead><tr><th>Trial</th><th>Stage</th><th>Status</th><th>Threads</th><th>KV</th><th>FA</th><th>Gen t/s</th><th>Prefill t/s</th></tr></thead><tbody><tr><td>A1</td><td>A</td><td>ok</td><td>3</td><td>f16</td><td>auto</td><td>50.55</td><td>123.39</td></tr><tr><td>A2</td><td>A</td><td>pruned</td><td>5</td><td>f16</td><td>auto</td><td>-</td><td>-</td></tr><tr><td>A3</td><td>A</td><td>pruned</td><td>14</td><td>f16</td><td>auto</td><td>-</td><td>-</td></tr><tr><td>A4</td><td>A</td><td>pruned</td><td>15</td><td>f16</td><td>auto</td><td>-</td><td>-</td></tr><tr><td>B1</td><td>B</td><td>ok</td><td>3</td><td>f16</td><td>off</td><td>48.17</td><td>115.95</td></tr><tr><td>B2</td><td>B</td><td>pruned</td><td>3</td><td>q8_0</td><td>off</td><td>-</td><td>-</td></tr><tr><td>B3</td><td>B</td><td>pruned</td><td>3</td><td>q4_0</td><td>off</td><td>-</td><td>-</td></tr><tr><td>B4</td><td>B</td><td>pruned</td><td>3</td><td>f16</td><td>on</td><td>-</td><td>-</td></tr><tr><td>B5</td><td>B</td><td>pruned</td><td>3</td><td>q8_0</td><td>on</td><td>-</td><td>-</td></tr><tr><td>B6</td><td>B</td><td>pruned</td><td>3</td><td>q4_0</td><td>on</td><td>-</td><td>-</td></tr><tr><td>C1</td><td>C</td><td>ok</td><td>3</td><td>f16</td><td>off</td><td>47.80</td><td>114.30</td></tr><tr><td>C2</td><td>C</td><td>ok</td><td>3</td><td>f16</td><td>off</td><td>47.62</td><td>114.42</td></tr><tr><td>C3</td><td>C</td><td>ok</td><td>3</td><td>f16</td><td>off</td><td>46.44</td><td>113.63</td></tr><tr><td>confirm-baseline</td><td>confirm</td><td>ok</td><td>5</td><td>f16</td><td>auto</td><td>61.57</td><td>178.70</td></tr><tr><td>confirm-best</td><td>confirm</td><td>ok</td><td>3</td><td>f16</td><td>off</td><td>46.94</td><td>113.11</td></tr></tbody></table>
+</section>
+</body>
+</html>

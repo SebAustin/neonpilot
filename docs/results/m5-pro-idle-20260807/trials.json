@@ -1,0 +1,534 @@
+[
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:25:03.467824+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 50.547115,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        51.2465,
+        50.7841,
+        50.4768,
+        50.1136,
+        50.1146
+      ],
+      "stddev_ts": 0.480939,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 123.386262,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        124.798,
+        123.882,
+        123.25,
+        122.651,
+        122.35
+      ],
+      "stddev_ts": 0.983679,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "A",
+    "started_at": "2026-08-07T02:24:25.294497+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "A1"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 5,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:25:03.467861+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "A",
+    "started_at": "2026-08-07T02:25:03.467861+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "A2"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 14,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:25:03.467865+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "A",
+    "started_at": "2026-08-07T02:25:03.467865+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "A3"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 15,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:25:03.467867+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "A",
+    "started_at": "2026-08-07T02:25:03.467867+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "A4"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:26:03.864318+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 48.169129,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        48.753,
+        48.3571,
+        48.1117,
+        47.9098,
+        47.714
+      ],
+      "stddev_ts": 0.404326,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 115.95114,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        117.315,
+        116.691,
+        115.826,
+        115.176,
+        114.748
+      ],
+      "stddev_ts": 1.057161,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "B",
+    "started_at": "2026-08-07T02:25:23.472968+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "B1"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q8_0",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:26:03.864358+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "B",
+    "started_at": "2026-08-07T02:26:03.864358+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "B2"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "q4_0",
+      "cache_type_v": "q4_0",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:26:03.864363+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "B",
+    "started_at": "2026-08-07T02:26:03.864363+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "B3"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "on",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:26:03.864365+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "B",
+    "started_at": "2026-08-07T02:26:03.864365+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "B4"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "q8_0",
+      "cache_type_v": "q8_0",
+      "flash_attn": "on",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:26:03.864368+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "B",
+    "started_at": "2026-08-07T02:26:03.864368+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "B5"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "q4_0",
+      "cache_type_v": "q4_0",
+      "flash_attn": "on",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:26:03.864369+00:00",
+    "error": null,
+    "generation": null,
+    "is_synthetic_config": false,
+    "prefill": null,
+    "reps": 0,
+    "stage": "B",
+    "started_at": "2026-08-07T02:26:03.864369+00:00",
+    "status": "pruned",
+    "thermal": null,
+    "trial_id": "B6"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:27:04.748294+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 47.799984,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        48.4188,
+        48.0881,
+        47.6587,
+        47.5683,
+        47.2659
+      ],
+      "stddev_ts": 0.454115,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 114.297125,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        116.036,
+        115.202,
+        114.3,
+        113.424,
+        112.523
+      ],
+      "stddev_ts": 1.392112,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "C",
+    "started_at": "2026-08-07T02:26:23.868530+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "C1"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 1024
+    },
+    "ended_at": "2026-08-07T02:28:05.637241+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 47.619211,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        48.1372,
+        47.8413,
+        47.5533,
+        47.3739,
+        47.1903
+      ],
+      "stddev_ts": 0.376209,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 114.41976,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        115.768,
+        115.103,
+        114.353,
+        113.664,
+        113.211
+      ],
+      "stddev_ts": 1.039227,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "C",
+    "started_at": "2026-08-07T02:27:24.751326+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "C2"
+  },
+  {
+    "config": {
+      "batch": 4096,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 2048
+    },
+    "ended_at": "2026-08-07T02:29:07.082474+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 46.440111,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        47.9092,
+        46.6001,
+        46.8929,
+        46.6748,
+        44.1235
+      ],
+      "stddev_ts": 1.397374,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 113.634709,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        115.001,
+        114.586,
+        113.558,
+        112.878,
+        112.15
+      ],
+      "stddev_ts": 1.178509,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "C",
+    "started_at": "2026-08-07T02:28:25.638430+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "C3"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "auto",
+      "threads": 5,
+      "ubatch": 512
+    },
+    "ended_at": "2026-08-07T02:29:55.370749+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 61.574568,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        62.0432,
+        61.8604,
+        61.5539,
+        61.299,
+        61.1163
+      ],
+      "stddev_ts": 0.38332,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": true,
+    "prefill": {
+      "avg_ts": 178.703004,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        182.976,
+        180.403,
+        178.287,
+        176.884,
+        174.965
+      ],
+      "stddev_ts": 3.106548,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "confirm",
+    "started_at": "2026-08-07T02:29:27.087564+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "confirm-baseline"
+  },
+  {
+    "config": {
+      "batch": 2048,
+      "cache_type_k": "f16",
+      "cache_type_v": "f16",
+      "flash_attn": "off",
+      "threads": 3,
+      "ubatch": 1024
+    },
+    "ended_at": "2026-08-07T02:30:56.885998+00:00",
+    "error": null,
+    "generation": {
+      "avg_ts": 46.940742,
+      "n_gen": 128,
+      "n_prompt": 0,
+      "samples_ts": [
+        47.4087,
+        47.1666,
+        47.036,
+        46.7612,
+        46.3312
+      ],
+      "stddev_ts": 0.413143,
+      "test_type": "tg"
+    },
+    "is_synthetic_config": false,
+    "prefill": {
+      "avg_ts": 113.111466,
+      "n_gen": 0,
+      "n_prompt": 512,
+      "samples_ts": [
+        114.468,
+        113.677,
+        113.077,
+        112.537,
+        111.799
+      ],
+      "stddev_ts": 1.026419,
+      "test_type": "pp"
+    },
+    "reps": 5,
+    "stage": "confirm",
+    "started_at": "2026-08-07T02:30:15.375786+00:00",
+    "status": "ok",
+    "thermal": {
+      "cooldown_s": 20.0,
+      "cpu_temp_c": null,
+      "source": "elapsed-fallback",
+      "throttled": null
+    },
+    "trial_id": "confirm-best"
+  }
+]

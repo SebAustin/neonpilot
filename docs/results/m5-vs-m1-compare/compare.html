@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neonpilot compare: Apple M5 Pro vs. Apple M1 Max</title>
+<style>
+:root {
+  --bg: #0b0d12; --fg: #e8e8ec; --accent: #4fd1c5; --accent2: #f6ad55;
+  --muted: #9aa0ab; --border: #242832; --surface: #161a22;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); margin: 0; padding: 2rem; line-height: 1.5;
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+h1, h2 { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
+th { background: var(--surface); }
+.bar-baseline { fill: var(--muted); }
+.bar-tuned { fill: var(--accent); }
+.chart-title { fill: var(--fg); font-size: 13px; }
+.bar-label { fill: var(--fg); font-size: 12px; }
+.caveat { color: var(--accent2); border-left: 3px solid var(--accent2); padding-left: 0.75rem; }
+.delta-highlight { background: rgba(246, 173, 85, 0.18); }
+section { margin-bottom: 2rem; }
+code { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>neonpilot compare: Apple M5 Pro vs. Apple M1 Max</h1>
+<p>A: <code>qwen2.5-3b-instruct-q4_k_m</code> on Apple M5 Pro | B: <code>qwen2.5-3b-instruct-q4_k_m</code> on Apple M1 Max</p>
+<section>
+<h2>Chip feature comparison</h2>
+<table><thead><tr><th>Feature</th><th>Apple M5 Pro</th><th>Apple M1 Max</th></tr></thead><tbody><tr class="delta-highlight"><td>bf16</td><td>True</td><td>False</td></tr><tr><td>dotprod</td><td>True</td><td>True</td></tr><tr><td>fp16</td><td>True</td><td>True</td></tr><tr class="delta-highlight"><td>i8mm</td><td>True</td><td>False</td></tr><tr><td>neon</td><td>True</td><td>True</td></tr><tr class="delta-highlight"><td>sme</td><td>True</td><td>False</td></tr><tr class="delta-highlight"><td>sme2</td><td>True</td><td>False</td></tr><tr><td>sve</td><td>False</td><td>False</td></tr><tr><td>sve2</td><td>False</td><td>False</td></tr></tbody></table>
+</section>
+<section>
+<h2>Throughput</h2>
+<h3>Apple M5 Pro</h3>
+<svg viewBox="0 0 440 96" role="img" aria-label="Generation throughput comparison chart"><text x="0" y="14" class="chart-title">Generation throughput</text><rect x="0" y="24" width="290.0" height="26" class="bar-baseline"></rect><text x="298.0" y="42" class="bar-label">Baseline: 61.57 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 61.57 t/s</text></svg>
+<svg viewBox="0 0 440 96" role="img" aria-label="Prefill throughput comparison chart"><text x="0" y="14" class="chart-title">Prefill throughput</text><rect x="0" y="24" width="290.0" height="26" class="bar-baseline"></rect><text x="298.0" y="42" class="bar-label">Baseline: 178.70 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 178.70 t/s</text></svg>
+<p>Generation speedup: +0.0% | Prefill speedup: +0.0%</p>
+<p>Winning config: defaults (as resolved by llama-bench; tuning did not beat the baseline)</p>
+<p>Measurement conditions: loadavg(1m/5m/15m)=1.07/1.48/1.76, top process: /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer (6.5% CPU)</p>
+<h3>Apple M1 Max</h3>
+<svg viewBox="0 0 440 96" role="img" aria-label="Generation throughput comparison chart"><text x="0" y="14" class="chart-title">Generation throughput</text><rect x="0" y="24" width="159.7" height="26" class="bar-baseline"></rect><text x="167.7" y="42" class="bar-label">Baseline: 13.24 t/s</text><rect x="0" y="60" width="290.0" height="26" class="bar-tuned"></rect><text x="298.0" y="78" class="bar-label">Tuned: 24.05 t/s</text></svg>
+<svg viewBox="0 0 440 96" role="img" aria-label="Prefill throughput comparison chart"><text x="0" y="14" class="chart-title">Prefill throughput</text><rect x="0" y="24" width="290.0" height="26" class="bar-baseline"></rect><text x="298.0" y="42" class="bar-label">Baseline: 182.51 t/s</text><rect x="0" y="60" width="254.3" height="26" class="bar-tuned"></rect><text x="262.3" y="78" class="bar-label">Tuned: 160.03 t/s</text></svg>
+<p>Generation speedup: +81.6% | Prefill speedup: -12.3%</p>
+<p>Winning config: threads=6, cache_type=f16/f16, flash_attn=off, batch/ubatch=2048/512</p>
+<p>Measurement conditions: loadavg(1m/5m/15m)=3.78/4.23/3.73, top process: /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer) (55.3% CPU)</p>
+</section>
+<section>
+<h2>Winning config diff</h2>
+<table><thead><tr><th>Field</th><th>A</th><th>B</th></tr></thead><tbody><tr><td>threads</td><td>defaults (not measured)</td><td>6</td></tr><tr><td>cache_type_k</td><td>defaults (not measured)</td><td>f16</td></tr><tr><td>cache_type_v</td><td>defaults (not measured)</td><td>f16</td></tr><tr><td>flash_attn</td><td>defaults (not measured)</td><td>off</td></tr><tr><td>batch</td><td>defaults (not measured)</td><td>2048</td></tr><tr><td>ubatch</td><td>defaults (not measured)</td><td>512</td></tr></tbody></table>
+</section>
+</body>
+</html>
